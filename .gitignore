@@ -1,0 +1,25 @@
+
+# basic_approaches/
+basic_approaches/color_space_transformations.py
+basic_approaches/__pycache__/
+basic_approaches/test/
+
+basic_approaches/.ipynb_checkpoints/
+basic_approaches/.idea/
+
+
+# mask_checking/
+mask_checking/test/
+
+mask_checking/.ipynb_checkpoints/
+
+
+# path_creating
+path_creating/test/
+
+path_creating/.ipynb_checkpoints/
+
+
+
+
+
