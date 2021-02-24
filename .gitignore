@@ -10,6 +10,8 @@ basic_approaches/.idea/
 
 # mask_checking/
 mask_checking/test/
+mask_checking/bdd100_data/
+mask_checking/cityscapes_data/
 
 mask_checking/.ipynb_checkpoints/
 
