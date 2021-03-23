@@ -27,18 +27,18 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
 
     # Ratio between object and background area
     # Min ratio for object chosing
-    # default 0, i.e. chose objects with different size
+    # default 0.01, i.e. obj_area / bg_area
     # can change obj_bg_ratio, for Example obj_bg_ratio = 0.005
-    obj_bg_ratio = 0
+    obj_bg_ratio = 0.01
 
     bg_area = int(BGheight * BGwidth)
 
     obj_areas_ratio = [obj_area / bg_area for obj_area in obj_areas]
     obj_areas_ratio = np.array(obj_areas_ratio)
 
-    person_ids = np.where(obj_areas_ratio > obj_bg_ratio)[0]
+    person_ids = np.where(obj_areas_ratio >= obj_bg_ratio)[0]
     if len(person_ids) == 0:
-        return False
+        raise IOError("didn't person find")
     else:
         person_id = np.random.choice(person_ids)
         x, y, w, h = cv2.boundingRect(obj_contours[person_id])
@@ -53,7 +53,7 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
         return obj_img, obj_mask, x, y, w, h
 
 # Random place finding
-def random_place_finder(BGmask, ground_value, sidewalk_value, road_value, BGheight, BGwidth):
+def random_place_finder(BGmask, ground_value, sidewalk_value, road_value, BGheight, BGwidth, y, h):
     gray_BGmask = cv2.cvtColor(BGmask, cv2.COLOR_RGB2GRAY)
 
     BGroad_thresh = np.where(
@@ -63,33 +63,40 @@ def random_place_finder(BGmask, ground_value, sidewalk_value, road_value, BGheig
     contour_areas = [cv2.contourArea(contour) for contour in BGroad_contours]
 
     area_id = contour_areas.index(max(contour_areas))
-
+    y_max = y + h
     bg_mask = np.full((BGheight, BGwidth), 0, np.uint8)
     bg_mask = cv2.drawContours(bg_mask, BGroad_contours, contourIdx=area_id, color=255, thickness=-1)
 
+    bg_mask[y_max:,:] = 0
+
     place_koordinates = np.where(bg_mask == 255)
     size_road_value = len(place_koordinates[0])
-    random_place = random.randrange(size_road_value)
-    stand_y, stand_x = np.array([place_koordinates[0][random_place], place_koordinates[1][random_place]])
-
-    return stand_y, stand_x
+    if size_road_value == 0:
+        raise IOError("didn't road find")
+    else:
+        random_place = random.randrange(size_road_value)
+        stand_y, stand_x = np.array([place_koordinates[0][random_place], place_koordinates[1][random_place]])
+        return stand_y, stand_x
 
 # Size of person finding
 def person_size_finder(stand_y, w, h, obj_height, obj_width):
-    M = np.array([[1000., 1.], [540., 1.]])
-    v = np.array([800., 170.])
-    solve = np.linalg.solve(M, v)
+    # To find the size of the person, we assume that
+    # person has a certain size at two different
+    # positions.Let's write the two equations and solve them
+    # h = y*a + b
+    # h - size of the person (px)
+    # y - position (px)
+
+    # 800 = 1000*a + b
+    # 170 = 540*a + b
+
+    # solve = [a, b]
+    solve = [1.37, -569.57]
 
     stand_obj_height = round(solve[0] * stand_y + solve[1])
     stand_obj_width = round(w / h * stand_obj_height)
 
-    obj_area = int(obj_height * obj_width * 1.2)
-    stand_obj_area = int(stand_obj_height * stand_obj_width)
-
-    if obj_area <= stand_obj_area:
-        return False
-    else:
-        return stand_obj_height, stand_obj_width
+    return stand_obj_height, stand_obj_width
 
 # Matting function
 def border_blender(img, mask):
@@ -112,7 +119,6 @@ def border_blender(img, mask):
 
         return kern_value, iter_value
 
-
     def trimap_creater(mask):
         kernel_value, iteration_value = blur_parameter_finder(mask)
         eros_iter_value = iteration_value
@@ -132,7 +138,6 @@ def border_blender(img, mask):
 
         return added_masks
 
-
     def matting(img, trimap):
         img = img/255.0
         trimap = cv2.cvtColor(trimap, cv2.COLOR_RGB2GRAY)
@@ -151,7 +156,6 @@ def border_blender(img, mask):
         return opening
 
     trimap_mask = trimap_creater(mask)
-
     new_img, alpha = matting(img, trimap_mask)
     new_mask = (alpha * 255).astype(np.uint8)
     new_mask = np.where(new_mask >= 110, 255, 0).astype(np.uint8)
