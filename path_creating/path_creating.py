@@ -1,6 +1,7 @@
 
 import cv2
 import numpy as np
+from multiprocessing import Pool
 import os, glob
 import time
 import json
@@ -8,12 +9,7 @@ import csv
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 
-fgNames = ['person']
-bgNames = ['ground','road','sidewalk']
-json_directory = '/mrtstorage/datasets/public/cityscapes/gtFine'
-fgPaths = '/home/roesch/Data/Documents/lehre/students/Anton/image_data_augmentation/basic_approaches/citysc_fgPaths.csv'
-bgPaths = '/home/roesch/Data/Documents/lehre/students/Anton/image_data_augmentation/basic_approaches/citysc_bgPaths.csv'
-json_paths = glob.glob(os.path.join(json_directory, '*','*','*.json'))
+
 def pathWriter(data, path):
     # Write paths to a CSV file
     with open(path, "w", newline='') as csv_file:
@@ -28,54 +24,86 @@ def pathCreater(json_path):
     img_path = os.path.join(img_directory, str(data_name) + '_leftImg8bit.png')
     
     return img_path, mask_path
+
+def processJsonFiles(json_path, obj_bg_ratio=0.001):
+    fg_path = None
+    bg_path = None
+    with open(json_path) as json_file:
+        json_data = json.load(json_file)
+        obj_key = 'objects'
+        if obj_key in  json_data:
+            if ('imgHeight' in json_data) & ('imgWidth' in json_data):
+                imgArea = int(json_data['imgHeight'] * json_data['imgWidth'])
+            else:
+                imgArea = 2097152
+
+            for label in json_data[obj_key]:
+                if any([className in label['label'] for className in fgNames]):
+                    obj_polygon = np.expand_dims(np.array(label['polygon']), axis = 1)
+                    objArea = cv2.contourArea(obj_polygon)
+                    current_obj_bg_ratio = objArea/imgArea
+                    if current_obj_bg_ratio >= obj_bg_ratio:
+                        img_path, mask_path = pathCreater(json_path)
+                        act_data = [img_path, mask_path]
+                        fg_path = act_data
+
+                if any([className in label['label'] for className in bgNames]):
+                    img_path, mask_path = pathCreater(json_path)
+                    act_data = [img_path, mask_path]
+                    bg_path = act_data
+    return fg_path, bg_path
+
+def json_files_multiprocessing(func, argument_list, num_processes):
+
+    pool = Pool(processes=num_processes)
+
+    fgList = []
+    bgList = []
+    for result in tqdm(pool.imap(func=func, iterable=argument_list), total=len(argument_list), desc="Scanning scene for pedestrians and roads: "):
+        if result[0]:
+            fgList.append(result[0])
+        if result[1]:
+            bgList.append(result[1])
+    return fgList, bgList
+
+def glob_multiprocessing(func, argument_list, num_processes):
+
+    pool = Pool(processes=num_processes)
+
+    result_list_tqdm = []
+    for result in tqdm(pool.imap(func=func, iterable=argument_list), total=len(argument_list), desc="Globbing all json files: "):
+        result_list_tqdm.extend(result)
+
+    return result_list_tqdm
+
+def globJsonFiles(jsonDir):
+    return glob.glob(os.path.join(jsonDir, "*.json"))
 # MAIN
 if __name__ == '__main__':
     start_time = time.time()
-    
-    dataNumb   = 0
-    fgCounter  = 0
-    bgCounter  = 0
-    fgList     = []
-    bgList     = []
+    num_processes = 16
+    fgNames = ['person']
+    bgNames = ['ground','road','sidewalk']
+    json_directory = '/mrtstorage/datasets/public/cityscapes/gtFine'
+    fgPaths = '/home/roesch/Data/Documents/lehre/students/Anton/image_data_augmentation/basic_approaches/citysc_fgPaths.csv'
+    bgPaths = '/home/roesch/Data/Documents/lehre/students/Anton/image_data_augmentation/basic_approaches/citysc_bgPaths.csv'
+    glob_dirs = glob.glob(os.path.join(json_directory, '*','*'))
+    json_paths = glob_multiprocessing(globJsonFiles, glob_dirs, num_processes)
     # Ratio between object and background area
     # Min ratio for object chosing
     # obj_bg_ratio = 0 means chosing objects with different size
     # can change obj_bg_ratio, for Example obj_bg_ratio = 0.01
     obj_bg_ratio = 0.001    #obj/img
-    for json_path in tqdm(json_paths):
-        with open(json_path) as json_file:
-            json_data = json.load(json_file)
-            obj_key = 'objects'
-            if obj_key in  json_data:
-                if ('imgHeight' in json_data) & ('imgWidth' in json_data):
-                    imgArea = int(json_data['imgHeight'] * json_data['imgWidth'])
-                else:
-                    imgArea = 2097152
-                
-                for label in json_data[obj_key]:
-                    if any([className in label['label'] for className in fgNames]):  
-                        obj_polygon = np.expand_dims(np.array(label['polygon']), axis = 1)   
-                        objArea = cv2.contourArea(obj_polygon)   
-                        current_obj_bg_ratio = objArea/imgArea
-                        if current_obj_bg_ratio >= obj_bg_ratio:
-                            img_path, mask_path = pathCreater(json_path)
-                            act_data = [img_path, mask_path]
-                            fgList.append(act_data)
-                            fgCounter += 1
-                                           
-                    if any([className in label['label'] for className in bgNames]):              
-                        img_path, mask_path = pathCreater(json_path)
-                        act_data = [img_path, mask_path]
-                        bgList.append(act_data)
-                        bgCounter += 1
 
-        dataNumb += 1
-    
+    # I don't know how to give more than one argument at the moment
+    # so obj_bg_ratio has a default value in the function definition
+    fgList, bgList  = json_files_multiprocessing(processJsonFiles, json_paths[:100], num_processes)
+
     pathWriter(fgList, fgPaths)
     pathWriter(bgList, bgPaths)
     
-    print('FG data: ',fgCounter)
-    print('BG data: ',bgCounter)
+    print('FG data: ',len(fgList))
+    print('BG data: ',len(bgList))
     
-    print("------------------- %s done --------------------" % (dataNumb))
+    print("------------------- %s done --------------------" % (max(len(fgList), len(bgList))))
     print("----------------- %s seconds ----------------" % ( round((time.time() - start_time), 2) ))
