@@ -82,8 +82,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset-size', dest='dataset_size', type=int, default=DEFAULT_DATASET_SIZE,
                         help='Choose the size of the created dataset')
     parser.add_argument('--output-path', dest='output_path', default=DEFAULT_OUTPUT_PATH, help='Choose where the created images are saved to.')
-    parser.add_argument('--fg', dest='fgPaths', default=DEFAULT_FG_PATH)
-    parser.add_argument('--bg', dest='bgPaths', default=DEFAULT_BG_PATH)
+    parser.add_argument('--fg', dest='fgPaths', default=DEFAULT_FG_PATH, help='Select the csv files which where created by the path_creating script')
+    parser.add_argument('--bg', dest='bgPaths', default=DEFAULT_BG_PATH, help='Select the csv files which where created by the path_creating script')
     args = parser.parse_args()
     dataset_size = args.dataset_size
 
