@@ -62,15 +62,13 @@ if __name__ == '__main__':
                             act_data = [img_path, mask_path]
                             fgList.append(act_data)
                             fgCounter += 1
-                            break
                                            
-                for label in json_data[obj_key]:
                     if any([className in label['label'] for className in bgNames]):              
                         img_path, mask_path = pathCreater(json_path)
                         act_data = [img_path, mask_path]
                         bgList.append(act_data)
                         bgCounter += 1
-                        break
+
         dataNumb += 1
     
     pathWriter(fgList, fgPaths)
