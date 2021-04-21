@@ -6,6 +6,8 @@ import time
 import json
 import csv
 import matplotlib.pyplot as plt 
+from tqdm import tqdm
+
 fgNames = ['person']
 bgNames = ['ground','road','sidewalk']
 json_directory = '/mrtstorage/datasets/public/cityscapes/gtFine'
@@ -40,7 +42,7 @@ if __name__ == '__main__':
     # obj_bg_ratio = 0 means chosing objects with different size
     # can change obj_bg_ratio, for Example obj_bg_ratio = 0.01
     obj_bg_ratio = 0.001    #obj/img
-    for json_path in json_paths:  
+    for json_path in tqdm(json_paths):
         with open(json_path) as json_file:
             json_data = json.load(json_file)
             obj_key = 'objects'
