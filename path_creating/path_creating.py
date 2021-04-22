@@ -5,11 +5,22 @@ from multiprocessing import Pool
 import argparse
 import os, glob
 import time
+import sys
 import json
 import csv
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 
+class textcolor:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def pathWriter(data, path):
     # Write paths to a CSV file
@@ -106,6 +117,9 @@ if __name__ == '__main__':
 
     glob_dirs = glob.glob(os.path.join(json_directory, '*','*'))
     json_paths = glob_multiprocessing(globJsonFiles, glob_dirs, num_processes)
+    if not json_paths:
+        print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: There were no csv files were I assumed them to be. Is {os.path.abspath(json_directory)} really the right path to cityscapes?")
+        sys.exit(0)
     # Ratio between object and background area
     # Min ratio for object chosing
     # obj_bg_ratio = 0 means chosing objects with different size
@@ -115,7 +129,9 @@ if __name__ == '__main__':
     # I don't know how to give more than one argument at the moment
     # so obj_bg_ratio has a default value in the function definition
     fgList, bgList  = json_files_multiprocessing(processJsonFiles, json_paths, num_processes)
-
+    if not fgList and not bgList:
+        print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: I found some csv, but it seems like I could not retrieve any path to the cityscapes images. Maybe {os.path.abspath(json_directory)} was not the right path to cityscapes.") 
+        sys.exit(1)
     pathWriter(fgList, fgPaths)
     pathWriter(bgList, bgPaths)
     
