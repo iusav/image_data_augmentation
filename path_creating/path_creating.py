@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 from multiprocessing import Pool
+import argparse
 import os, glob
 import time
 import json
@@ -81,12 +82,28 @@ def globJsonFiles(jsonDir):
 # MAIN
 if __name__ == '__main__':
     start_time = time.time()
-    num_processes = 16
     fgNames = ['person']
     bgNames = ['ground','road','sidewalk']
-    json_directory = '/mrtstorage/datasets/public/cityscapes/gtFine'
-    fgPaths = '/home/roesch/Data/Documents/lehre/students/Anton/image_data_augmentation/basic_approaches/citysc_fgPaths.csv'
-    bgPaths = '/home/roesch/Data/Documents/lehre/students/Anton/image_data_augmentation/basic_approaches/citysc_bgPaths.csv'
+    fgFileName = "citysc_fgPaths.csv"
+    bgFileName = "citysc_bgPaths.csv"
+    file_dir = os.path.dirname(os.path.realpath(__file__))
+    DEFAULT_OUTPUT = os.path.abspath(os.path.join(file_dir, "../basic_approaches/"))
+    DEFAULT_JSON_DIR = '/mrtstorage/datasets/public/cityscapes/gtFine'
+    DEFAULT_NUMBER_PROCESSES = 16
+
+    parser = argparse.ArgumentParser(description='Create the paths needed for the basic augmentation script.')
+    parser.add_argument('--output-dir', dest='output_dir', default=DEFAULT_OUTPUT, help='Choose the destination where you want to save the output csv to')
+    parser.add_argument('--json-dir', dest='json_dir', default=DEFAULT_JSON_DIR, help='Provide the PATH_TO_CITYSCAPES/cityscapes/gtFine')
+    parser.add_argument('--processes', dest='processes', type=int, default=DEFAULT_NUMBER_PROCESSES, help='Set the number of processes for multiprocessing')
+
+    args = parser.parse_args()
+
+    output_dir = args.output_dir
+    fgPaths = os.path.join(output_dir, fgFileName)
+    bgPaths = os.path.join(output_dir, bgFileName)
+    json_directory = args.json_dir
+    num_processes = args.processes
+
     glob_dirs = glob.glob(os.path.join(json_directory, '*','*'))
     json_paths = glob_multiprocessing(globJsonFiles, glob_dirs, num_processes)
     # Ratio between object and background area
