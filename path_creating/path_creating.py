@@ -97,7 +97,7 @@ if __name__ == '__main__':
 
     # I don't know how to give more than one argument at the moment
     # so obj_bg_ratio has a default value in the function definition
-    fgList, bgList  = json_files_multiprocessing(processJsonFiles, json_paths[:100], num_processes)
+    fgList, bgList  = json_files_multiprocessing(processJsonFiles, json_paths, num_processes)
 
     pathWriter(fgList, fgPaths)
     pathWriter(bgList, bgPaths)
