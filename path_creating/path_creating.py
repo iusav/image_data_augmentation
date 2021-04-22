@@ -90,13 +90,8 @@ def glob_multiprocessing(func, argument_list, num_processes):
 
 def globJsonFiles(jsonDir):
     return glob.glob(os.path.join(jsonDir, "*.json"))
-# MAIN
-if __name__ == '__main__':
-    start_time = time.time()
-    fgNames = ['person']
-    bgNames = ['ground','road','sidewalk']
-    fgFileName = "citysc_fgPaths.csv"
-    bgFileName = "citysc_bgPaths.csv"
+
+def pathCreatingArgParse():
     file_dir = os.path.dirname(os.path.realpath(__file__))
     DEFAULT_OUTPUT = os.path.abspath(os.path.join(file_dir, "../basic_approaches/"))
     DEFAULT_JSON_DIR = '/mrtstorage/datasets/public/cityscapes/gtFine'
@@ -106,8 +101,17 @@ if __name__ == '__main__':
     parser.add_argument('--output-dir', dest='output_dir', default=DEFAULT_OUTPUT, help='Choose the destination where you want to save the output csv to')
     parser.add_argument('--json-dir', dest='json_dir', default=DEFAULT_JSON_DIR, help='Provide the PATH_TO_CITYSCAPES/cityscapes/gtFine')
     parser.add_argument('--processes', dest='processes', type=int, default=DEFAULT_NUMBER_PROCESSES, help='Set the number of processes for multiprocessing')
+    return parser.parse_args()
 
-    args = parser.parse_args()
+# MAIN
+if __name__ == '__main__':
+    start_time = time.time()
+    fgNames = ['person']
+    bgNames = ['ground','road','sidewalk']
+    fgFileName = "citysc_fgPaths.csv"
+    bgFileName = "citysc_bgPaths.csv"
+
+    args = pathCreatingArgParse()
 
     output_dir = args.output_dir
     fgPaths = os.path.join(output_dir, fgFileName)
