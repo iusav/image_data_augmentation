@@ -11,6 +11,7 @@ import csv
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 
+
 class textcolor:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -119,7 +120,9 @@ if __name__ == '__main__':
     json_directory = args.json_dir
     num_processes = args.processes
 
+    # globs all dirs inside cityscapes with all the train/val/trainval folders
     glob_dirs = glob.glob(os.path.join(json_directory, '*','*'))
+    # get all the csv files inside the folders.
     json_paths = glob_multiprocessing(globJsonFiles, glob_dirs, num_processes)
     if not json_paths:
         print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: There were no csv files were I assumed them to be. Is {os.path.abspath(json_directory)} really the right path to cityscapes?")
@@ -132,6 +135,7 @@ if __name__ == '__main__':
 
     # I don't know how to give more than one argument at the moment
     # so obj_bg_ratio has a default value in the function definition
+    # Adds the path to images to the list if the images contain person with a certain height
     fgList, bgList  = json_files_multiprocessing(processJsonFiles, json_paths, num_processes)
     if not fgList and not bgList:
         print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: I found some csv, but it seems like I could not retrieve any path to the cityscapes images. Maybe {os.path.abspath(json_directory)} was not the right path to cityscapes.") 
