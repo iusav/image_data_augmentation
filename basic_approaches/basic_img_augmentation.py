@@ -41,6 +41,7 @@ class AugmentationWorkerManager:
     def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list):
         self.workers = []
         self.task_queue = task_queue
+        # set up workers. Is num_workers-1 because one thread is reserved for the worker manager
         for i in range(num_workers-1):
             worker = AugmentationWorker(task_queue, fg_path_list, bg_path_list)
             self.workers.append(worker)
@@ -52,6 +53,7 @@ class AugmentationWorkerManager:
             worker.p.join()
 
     def monitorProcesses(self):
+        # this process continously updates the print inside the console to show the current state for each worker
         with output(output_type="dict", interval=0) as output_lines:
             while True:
                 output_lines["Images left on the queue: "] = self.task_queue.qsize()
@@ -61,9 +63,12 @@ class AugmentationWorkerManager:
 
 class AugmentationWorker:
     def __init__(self, task_queue, fg_path_list, bg_path_list):
+        # start the image augmentation for each worker
         self.p = Process(target=self.augmentImage, args=(task_queue, fg_path_list, bg_path_list))
+        # set the state as multiprocessing value so the thread can change the value of the member variable
         self.state = Value(c_char_p, b"init")
     def augmentImageInner(self, fg_path_list, bg_path_list, task_id):
+        # get a random foreground and background
         fg_path = random.choice(fg_path_list)  
         bg_path = random.choice(fg_path_list)
 
@@ -149,15 +154,16 @@ class AugmentationWorker:
                     raise queue.Empty exception if the queue is empty. 
                     queue(False) function would do the same task also.
                 '''
+                # pull a task number from the queue and try to augment the image
                 task = task_queue.get_nowait()
                 self.augmentImageInner(fg_path_list, bg_path_list, task)
             except queue.Empty:
+                # if the queue is empty this worker can shutdowm
                 self.state.value = bytes("{}Shutdown{}".format(textcolor.WARNING, textcolor.ENDC), "utf-8")
-                #print(f"{textcolor.WARNING}Shuttin down {current_process().name}, because task queue is empty.{textcolor.ENDC}")
                 break
             except FailedAugmentation as e:
+                # if the augmentation failed for some reason we need to put the task back on the queue
                 task_queue.put_nowait(task)
-
         return True
 
 def pathReader(path):
@@ -249,6 +255,7 @@ if __name__ == '__main__':
     processes = []
     num_processes = 8
     task_queue = Queue()
+    # put as many task on the queue as we want to have images in our dataset
     for i in range(dataset_size-id_data):
         task_queue.put(i)
     
