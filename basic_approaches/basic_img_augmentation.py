@@ -5,11 +5,13 @@ import csv
 import argparse
 import glob
 import time
+from reprint import output
 import random
 import numpy as np
 import matplotlib.pyplot as plt 
 from geometric_transformations import *
-from multiprocessing import Lock, Process, Queue, current_process
+from multiprocessing import Lock, Process, Queue, current_process, Value
+from ctypes import c_char_p
 import queue
 
 # Background
@@ -34,6 +36,129 @@ class textcolor:
 
 class FailedAugmentation(Exception):
     pass
+
+class AugmentationWorkerManager:
+    def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list):
+        self.workers = []
+        self.task_queue = task_queue
+        for i in range(num_workers-1):
+            worker = AugmentationWorker(task_queue, fg_path_list, bg_path_list)
+            self.workers.append(worker)
+            worker.p.start()
+        manager = Process(target=self.monitorProcesses)
+        manager.start()
+
+        for worker in self.workers:
+            worker.p.join()
+
+    def monitorProcesses(self):
+        with output(output_type="dict", interval=0) as output_lines:
+            while True:
+                output_lines["Images left on the queue: "] = self.task_queue.qsize()
+                for i, worker in enumerate(self.workers,1):
+                    output_lines["Worker {}".format(i)] = worker.state.value.decode()
+                time.sleep(0.1)
+
+class AugmentationWorker:
+    def __init__(self, task_queue, fg_path_list, bg_path_list):
+        self.p = Process(target=self.augmentImage, args=(task_queue, fg_path_list, bg_path_list))
+        self.state = Value(c_char_p, b"init")
+    def augmentImageInner(self, fg_path_list, bg_path_list, task_id):
+        fg_path = random.choice(fg_path_list)  
+        bg_path = random.choice(fg_path_list)
+
+        # Data name chosing
+        FGname, BGname = data_name(fg_path, bg_path)
+
+        # Data loading
+        self.state.value = b"loading.."
+        FGimg, FGmask, BGimg, BGmask = data_loader(fg_path, bg_path)
+        FGheight = FGmask.shape[0]; FGwidth = FGmask.shape[1]
+        BGheight = BGmask.shape[0]; BGwidth = BGmask.shape[1]
+
+
+        # -------- Transformation/ Translation -------- #
+        # Foreground fliping
+        self.state.value = b"Flip..."
+        flip_FGimg, flip_FGmask = data_fliper(FGimg, FGmask)
+
+        # Background fliping
+        flip_BGimg, flip_BGmask = data_fliper(BGimg, BGmask)
+        self.state.value = b"Preprocess objects..."
+        # Object preprocessing 
+        try:
+            obj_img, obj_mask, x,y,w,h = obj_preprocesser(flip_FGimg, 
+                                                        flip_FGmask, 
+                                                        BGheight, 
+                                                        BGwidth, 
+                                                        person_value, 
+                                                        FGheight, 
+                                                        FGwidth)
+        except OSError:
+            raise FailedAugmentation()
+        self.state.value = b"Find random place..."
+        # Random place finding
+        try:
+            stand_y, stand_x = random_place_finder(flip_BGmask,
+                                                    ground_value, 
+                                                    sidewalk_value, 
+                                                    road_value, 
+                                                    BGheight, 
+                                                    BGwidth,
+                                                    y,
+                                                    h)
+        except IOError:
+            raise FailedAugmentation("Could not find any road to place the object on.")
+        # Size of person finding
+        obj_mask_height = obj_mask.shape[0]; obj_mask_width = obj_mask.shape[1]
+        stand_obj_height, stand_obj_width = person_size_finder(stand_y, 
+                                                                w, 
+                                                                h, 
+                                                                obj_mask_height, 
+                                                                obj_mask_width)
+        self.state.value = b"Matting.."
+        # Img and mask of object resizing 
+        # Matting function using
+        resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = obj_resizer(obj_img, 
+                                                                                            obj_mask, 
+                                                                                            stand_obj_height, 
+                                                                                            stand_obj_width, 
+                                                                                            person_value)
+
+        # Foreground and background preprocessing 
+        fg_bg_img, fg_bg_mask = fg_bg_preprocesser(resized_obj_img, 
+                                                    smoother_mask, 
+                                                    alpha, 
+                                                    flip_BGimg, 
+                                                    flip_BGmask,
+                                                    stand_y, stand_x, 
+                                                    stand_obj_height, 
+                                                    stand_obj_width, 
+                                                    BGheight, 
+                                                    BGwidth,
+                                                    person_value)
+        self.state.value = b"Saving..."
+        # Data saving 
+        data_saver(BGname, fg_bg_img, fg_bg_mask, task_id)
+
+    def augmentImage(self, task_queue, fg_path_list, bg_path_list):
+        while True:
+            try:
+                '''
+                    try to get task from the queue. get_nowait() function will 
+                    raise queue.Empty exception if the queue is empty. 
+                    queue(False) function would do the same task also.
+                '''
+                task = task_queue.get_nowait()
+                self.augmentImageInner(fg_path_list, bg_path_list, task)
+            except queue.Empty:
+                self.state.value = bytes("{}Shutdown{}".format(textcolor.WARNING, textcolor.ENDC), "utf-8")
+                #print(f"{textcolor.WARNING}Shuttin down {current_process().name}, because task queue is empty.{textcolor.ENDC}")
+                break
+            except FailedAugmentation as e:
+                task_queue.put_nowait(task)
+
+        return True
 
 def pathReader(path):
     # Read paths of a CSV file
@@ -89,122 +214,10 @@ def current_id():
         current_id = int(len(path_list)+1)
     return current_id
 
-def augmentImageInner(fg_path_list, bg_path_list, task_id):
-    fg_path = random.choice(fg_path_list)  
-    bg_path = random.choice(fg_path_list)
-
-    # Data name chosing
-    FGname, BGname = data_name(fg_path, bg_path)
-
-    # Data loading
-    print(f"{current_process().name}: loading..")
-    #try:
-    FGimg, FGmask, BGimg, BGmask = data_loader(fg_path, bg_path)
-    # except:
-    #     return
-    print(f"{current_process().name}: Foreground:" + fg_path[0])
-    print(f"{current_process().name}: Background:" + bg_path[0])
-    FGheight = FGmask.shape[0]; FGwidth = FGmask.shape[1]
-    BGheight = BGmask.shape[0]; BGwidth = BGmask.shape[1]
-
-
-    # -------- Transformation/ Translation -------- #
-    # Foreground fliping
-    print(f"{current_process().name}: Flip...")
-    flip_FGimg, flip_FGmask = data_fliper(FGimg, FGmask)
-
-    # Background fliping
-    flip_BGimg, flip_BGmask = data_fliper(BGimg, BGmask)
-    print(f"{current_process().name}: Preprocess objects..")
-    # Object preprocessing 
-    try:
-        obj_img, obj_mask, x,y,w,h = obj_preprocesser(flip_FGimg, 
-                                                    flip_FGmask, 
-                                                    BGheight, 
-                                                    BGwidth, 
-                                                    person_value, 
-                                                    FGheight, 
-                                                    FGwidth)
-    except OSError:
-        raise FailedAugmentation("Preprocessing of the objects failed.")
-    print(f"{current_process().name}: Find random place...")
-    # Random place finding
-    try:
-        stand_y, stand_x = random_place_finder(flip_BGmask,
-                                                ground_value, 
-                                                sidewalk_value, 
-                                                road_value, 
-                                                BGheight, 
-                                                BGwidth,
-                                                y,
-                                                h)
-    except IOError:
-        raise FailedAugmentation("Could not find any road to place the object on.")
-    # Size of person finding
-    obj_mask_height = obj_mask.shape[0]; obj_mask_width = obj_mask.shape[1]
-    stand_obj_height, stand_obj_width = person_size_finder(stand_y, 
-                                                            w, 
-                                                            h, 
-                                                            obj_mask_height, 
-                                                            obj_mask_width)
-    print(f"{current_process().name}: Matting..")
-    # Img and mask of object resizing 
-    # Matting function using
-    resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = obj_resizer(obj_img, 
-                                                                                        obj_mask, 
-                                                                                        stand_obj_height, 
-                                                                                        stand_obj_width, 
-                                                                                        person_value)
-
-    # Foreground and background preprocessing 
-    fg_bg_img, fg_bg_mask = fg_bg_preprocesser(resized_obj_img, 
-                                                smoother_mask, 
-                                                alpha, 
-                                                flip_BGimg, 
-                                                flip_BGmask,
-                                                stand_y, stand_x, 
-                                                stand_obj_height, 
-                                                stand_obj_width, 
-                                                BGheight, 
-                                                BGwidth,
-                                                person_value)
-    print(f"{current_process().name}: Saving...")
-    # Data saving 
-    data_saver(BGname, fg_bg_img, fg_bg_mask, task_id)
-
-def augmentImage(task_queue, fg_path_list, bg_path_list):
-    while True:
-        try:
-            '''
-                try to get task from the queue. get_nowait() function will 
-                raise queue.Empty exception if the queue is empty. 
-                queue(False) function would do the same task also.
-            '''
-            task = task_queue.get_nowait()
-            augmentImageInner(fg_path_list, bg_path_list, task)
-        except queue.Empty:
-            print(f"{textcolor.WARNING}Shuttin down {current_process().name}, because task queue is empty.{textcolor.ENDC}")
-            break
-        except FailedAugmentation as e:
-            print(f"{str(e)}")
-            task_queue.put(task)
-        else:
-            print("------------- Image %s done --------------------" % (task))
-            print("------------------- %s rest --------------------" % (task_queue.qsize()))
-        # else:
-        #     '''
-        #         if no exception has been raised, add the task completion 
-        #         message to task_that_are_done queue
-        #     '''
-        #     print(task)
-        #     tasks_that_are_done.put(task + ' is done by ' + current_process().name)
-        #     time.sleep(.5)
-    return True
-
     
 if __name__ == '__main__':
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    DEFAULT_DATASET_SIZE = 10
+    DEFAULT_DATASET_SIZE = 50
     DEFAULT_OUTPUT_PATH = os.path.abspath(os.path.join(file_dir, "../created_dataset"))
     DEFAULT_FG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_fgPaths.csv"))
     DEFAULT_BG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_bgPaths.csv"))
@@ -234,21 +247,13 @@ if __name__ == '__main__':
         sys.exit(0)
     print(f"Start at image id {id_data}")
     processes = []
-    num_processes = 1
+    num_processes = 8
     task_queue = Queue()
     for i in range(dataset_size-id_data):
         task_queue.put(i)
     
-    # creating processes
-    for w in range(num_processes):
-        p = Process(target=augmentImage, args=(task_queue, fg_path_list, bg_path_list))
-        processes.append(p)
-        p.start()
-
-    # completing process
-    for p in processes:
-        p.join()
-
-    while not task_queue.empty():
+    manager = AugmentationWorkerManager(num_processes, task_queue, fg_path_list, bg_path_list)
+    while not task_queue.empty:
         pass
     print("----------------- %s seconds ----------------" % ( round((time.time() - start_time), 2) ))
+    sys.exit(0)
