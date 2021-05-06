@@ -227,6 +227,7 @@ if __name__ == '__main__':
     DEFAULT_OUTPUT_PATH = os.path.abspath(os.path.join(file_dir, "../created_dataset"))
     DEFAULT_FG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_fgPaths.csv"))
     DEFAULT_BG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_bgPaths.csv"))
+    DEFAULT_NUMBER_PROCESSES = 4
 
     parser = argparse.ArgumentParser(description='Create the augmented dataset for cityscapes.')
     parser.add_argument('--dataset-size', dest='dataset_size', type=int, default=DEFAULT_DATASET_SIZE,
@@ -234,12 +235,15 @@ if __name__ == '__main__':
     parser.add_argument('--output-path', dest='output_path', default=DEFAULT_OUTPUT_PATH, help='Choose where the created images are saved to.')
     parser.add_argument('--fg', dest='fgPaths', default=DEFAULT_FG_PATH, help='Select the csv files which where created by the path_creating script')
     parser.add_argument('--bg', dest='bgPaths', default=DEFAULT_BG_PATH, help='Select the csv files which where created by the path_creating script')
+    parser.add_argument('--process', dest='num_processes', default=DEFAULT_NUMBER_PROCESSES, help='Select the number of processes')
+
     args = parser.parse_args()
     dataset_size = args.dataset_size
 
     fgPaths = args.fgPaths
     bgPaths = args.bgPaths
     save_directory = args.output_path
+    num_processes = args.num_processes
 
     fg_path_list = pathReader(fgPaths)
     bg_path_list = pathReader(bgPaths)
@@ -252,8 +256,6 @@ if __name__ == '__main__':
         print("There are already enough images in the dataset. Either increase the dataset size or delete some images.")
         sys.exit(0)
     print(f"Start at image id {id_data}")
-    processes = []
-    num_processes = 8
     task_queue = Queue()
     # put as many task on the queue as we want to have images in our dataset
     for i in range(dataset_size-id_data):
