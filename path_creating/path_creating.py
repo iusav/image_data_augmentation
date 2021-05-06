@@ -32,7 +32,7 @@ def pathWriter(data, path):
 def pathCreater(json_path):
     data_name = '_'.join(json_path.split('/')[-1].split('_')[:-2])
     mask_directory = '/'.join(json_path.split('/')[:-1])
-    img_directory =  mask_directory.replace('gtFine/train', 'leftImg8bit/train')
+    img_directory =  mask_directory.replace('gtFine', 'leftImg8bit')
     mask_path = os.path.join(mask_directory, str(data_name) + '_gtFine_labelIds.png')
     img_path = os.path.join(img_directory, str(data_name) + '_leftImg8bit.png')
     
