@@ -220,7 +220,17 @@ def current_id():
         current_id = int(len(path_list)+1)
     return current_id
 
-    
+def checkForFolder(folder):
+    # check if folder structure exists
+    folders = [folder, os.path.join(folder, 'img'), os.path.join(folder, 'mask')]
+    for f in folders:
+        try:
+            os.makedirs(f)
+            print(f"Created {f}")
+        except FileExistsError:
+            # folder already exists
+            pass
+
 if __name__ == '__main__':
     file_dir = os.path.dirname(os.path.realpath(__file__))
     DEFAULT_DATASET_SIZE = 50
@@ -245,6 +255,7 @@ if __name__ == '__main__':
     save_directory = args.output_path
     num_processes = args.num_processes
 
+    checkForFolder(save_directory)
     fg_path_list = pathReader(fgPaths)
     bg_path_list = pathReader(bgPaths)
 
