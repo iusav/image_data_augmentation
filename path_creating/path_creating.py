@@ -10,7 +10,7 @@ import json
 import csv
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
-
+import json
 
 class textcolor:
     HEADER = '\033[95m'
@@ -24,19 +24,19 @@ class textcolor:
     UNDERLINE = '\033[4m'
 
 def pathWriter(data, path):
-    # Write paths to a CSV file
-    with open(path, "w", newline='') as csv_file:
-        writer = csv.writer(csv_file, delimiter=',')
-        for line in data:
-            writer.writerow(line)
+    # Write paths to a json file
+    with open(path, "w", newline='') as json_file:
+        json.dump(data, json_file)
 def pathCreater(json_path):
     data_name = '_'.join(json_path.split('/')[-1].split('_')[:-2])
     mask_directory = '/'.join(json_path.split('/')[:-1])
     img_directory =  mask_directory.replace('gtFine', 'leftImg8bit')
     mask_path = os.path.join(mask_directory, str(data_name) + '_gtFine_labelIds.png')
+    camera_directory = mask_directory.replace("gtFine", "camera")
     img_path = os.path.join(img_directory, str(data_name) + '_leftImg8bit.png')
+    camera_path = os.path.join(camera_directory, str(data_name) + "_camera.json")
     
-    return img_path, mask_path
+    return {"img": img_path, "mask": mask_path, "camera":camera_path}
 
 def processJsonFiles(json_path, obj_bg_ratio=0.001):
     fg_path = None
@@ -56,14 +56,10 @@ def processJsonFiles(json_path, obj_bg_ratio=0.001):
                     objArea = cv2.contourArea(obj_polygon)
                     current_obj_bg_ratio = objArea/imgArea
                     if current_obj_bg_ratio >= obj_bg_ratio:
-                        img_path, mask_path = pathCreater(json_path)
-                        act_data = [img_path, mask_path]
-                        fg_path = act_data
+                        fg_path = pathCreater(json_path)
 
                 if any([className in label['label'] for className in bgNames]):
-                    img_path, mask_path = pathCreater(json_path)
-                    act_data = [img_path, mask_path]
-                    bg_path = act_data
+                    bg_path = pathCreater(json_path)
     return fg_path, bg_path
 
 def json_files_multiprocessing(func, argument_list, num_processes):
@@ -109,8 +105,8 @@ if __name__ == '__main__':
     start_time = time.time()
     fgNames = ['person']
     bgNames = ['ground','road','sidewalk']
-    fgFileName = "citysc_fgPaths.csv"
-    bgFileName = "citysc_bgPaths.csv"
+    fgFileName = "citysc_fgPaths.json"
+    bgFileName = "citysc_bgPaths.json"
 
     args = pathCreatingArgParse()
 
@@ -125,7 +121,7 @@ if __name__ == '__main__':
     # get all the csv files inside the folders.
     json_paths = glob_multiprocessing(globJsonFiles, glob_dirs, num_processes)
     if not json_paths:
-        print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: There were no csv files were I assumed them to be. Is {os.path.abspath(json_directory)} really the right path to cityscapes?")
+        print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: There were no json files were I assumed them to be. Is {os.path.abspath(json_directory)} really the right path to cityscapes?")
         sys.exit(0)
     # Ratio between object and background area
     # Min ratio for object chosing
@@ -138,7 +134,7 @@ if __name__ == '__main__':
     # Adds the path to images to the list if the images contain person with a certain height
     fgList, bgList  = json_files_multiprocessing(processJsonFiles, json_paths, num_processes)
     if not fgList and not bgList:
-        print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: I found some csv, but it seems like I could not retrieve any path to the cityscapes images. Maybe {os.path.abspath(json_directory)} was not the right path to cityscapes.") 
+        print(f"{textcolor.WARNING}Warning{textcolor.ENDC}: I found some json, but it seems like I could not retrieve any path to the cityscapes images. Maybe {os.path.abspath(json_directory)} was not the right path to cityscapes.") 
         sys.exit(1)
     pathWriter(fgList, fgPaths)
     pathWriter(bgList, bgPaths)
