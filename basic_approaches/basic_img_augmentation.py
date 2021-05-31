@@ -5,6 +5,7 @@ import csv
 import argparse
 import glob
 import time
+import json
 from reprint import output
 import random
 import numpy as np
@@ -77,7 +78,7 @@ class AugmentationWorker:
 
         # Data loading
         self.state.value = b"loading.."
-        FGimg, FGmask, BGimg, BGmask = data_loader(fg_path, bg_path)
+        FGimg, FGmask, BGimg, BGmask, camera_dict = data_loader(fg_path, bg_path)
         FGheight = FGmask.shape[0]; FGwidth = FGmask.shape[1]
         BGheight = BGmask.shape[0]; BGwidth = BGmask.shape[1]
 
@@ -169,24 +170,23 @@ class AugmentationWorker:
 def pathReader(path):
     # Read paths of a CSV file
     with open(path, newline='') as fg_bg_data:
-        reader = csv.reader(fg_bg_data)
-        data = list(reader)
+        data = json.load(fg_bg_data)
     return data
 
-def data_name(fg_path,bg_path): 
-    FGname = '_'.join(fg_path[1].split('/')[-1].split('_')[:-2])
-    BGname = '_'.join(bg_path[1].split('/')[-1].split('_')[:-2])
-    
+def data_name(fg_path,bg_path):
+    FGname = '_'.join(fg_path["mask"].split('/')[-1].split('_')[:-2])
+    BGname = '_'.join(bg_path["mask"].split('/')[-1].split('_')[:-2])
+
     return FGname, BGname
 
-def data_loader(fg_path,bg_path):    
+def data_loader(fg_path,bg_path):
     # Foreground paths
-    imgFG_path = fg_path[0]; maskFG_path = fg_path[1]
-    
+    imgFG_path = fg_path["img"]; maskFG_path = fg_path["mask"]
+
     # Background paths
-    imgBG_path = bg_path[0]; maskBG_path = bg_path[1]
-    
-    
+    imgBG_path = bg_path["img"]; maskBG_path = bg_path["mask"]
+
+
     FGimg = cv2.imread(imgFG_path)
     FGimg = cv2.cvtColor(FGimg, cv2.COLOR_BGR2RGB)
     FGmask = cv2.imread(maskFG_path)
@@ -196,8 +196,9 @@ def data_loader(fg_path,bg_path):
     BGimg = cv2.cvtColor(BGimg, cv2.COLOR_BGR2RGB)
     BGmask = cv2.imread(maskBG_path)
     BGmask = cv2.cvtColor(BGmask, cv2.COLOR_BGR2RGB)
-    
-    return FGimg, FGmask, BGimg, BGmask   
+    with open(bg_path["camera"], "r") as camera_settings:
+        camera_dict = json.load(camera_settings)
+    return FGimg, FGmask, BGimg, BGmask, camera_dict
 
 def data_saver(data_name, img, mask, id_data):
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -235,17 +236,17 @@ if __name__ == '__main__':
     file_dir = os.path.dirname(os.path.realpath(__file__))
     DEFAULT_DATASET_SIZE = 50
     DEFAULT_OUTPUT_PATH = os.path.abspath(os.path.join(file_dir, "../created_dataset"))
-    DEFAULT_FG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_fgPaths.csv"))
-    DEFAULT_BG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_bgPaths.csv"))
+    DEFAULT_FG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_fgPaths.json"))
+    DEFAULT_BG_PATH = os.path.abspath(os.path.join(file_dir, "../basic_approaches/citysc_bgPaths.json"))
     DEFAULT_NUMBER_PROCESSES = 4
 
     parser = argparse.ArgumentParser(description='Create the augmented dataset for cityscapes.')
     parser.add_argument('--dataset-size', dest='dataset_size', type=int, default=DEFAULT_DATASET_SIZE,
                         help='Choose the size of the created dataset')
     parser.add_argument('--output-path', dest='output_path', default=DEFAULT_OUTPUT_PATH, help='Choose where the created images are saved to.')
-    parser.add_argument('--fg', dest='fgPaths', default=DEFAULT_FG_PATH, help='Select the csv files which where created by the path_creating script')
-    parser.add_argument('--bg', dest='bgPaths', default=DEFAULT_BG_PATH, help='Select the csv files which where created by the path_creating script')
-    parser.add_argument('--process', dest='num_processes', default=DEFAULT_NUMBER_PROCESSES, help='Select the number of processes')
+    parser.add_argument('--fg', dest='fgPaths', default=DEFAULT_FG_PATH, help='Select the json files which where created by the path_creating script.')
+    parser.add_argument('--bg', dest='bgPaths', default=DEFAULT_BG_PATH, help='Select the json files which where created by the path_creating script.')
+    parser.add_argument('--process', dest='num_processes', default=DEFAULT_NUMBER_PROCESSES, help='Select the number of processes.')
 
     args = parser.parse_args()
     dataset_size = args.dataset_size
