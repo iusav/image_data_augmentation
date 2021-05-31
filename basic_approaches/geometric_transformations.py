@@ -52,31 +52,84 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
 
         return obj_img, obj_mask, x, y, w, h
 
-# Random place finding
-def random_place_finder(BGmask, ground_value, sidewalk_value, road_value, BGheight, BGwidth, y, h):
-    gray_BGmask = cv2.cvtColor(BGmask, cv2.COLOR_RGB2GRAY)
+def test_for_occlusion(x, y, bg_mask, person_mask, occlusion_rate):
+    obj_height = person_mask.shape[0]; obj_width = person_mask.shape[1]
+    obj_start_y = y - obj_height
+    obj_start_x = x - obj_width // 2
+    if obj_start_y < 0:
+        obj_start_y = 0
+    if obj_start_x < 0:
+        obj_start_x = 0
+    obj_end_y = obj_start_y + obj_height
+    obj_end_x = obj_start_x + obj_width
+    if obj_end_x > bg_mask.shape[1]:
+        obj_end_x = bg_mask.shape[1]
+        obj_start_x = obj_end_x - obj_width
+    if obj_end_y > bg_mask.shape[0]:
+        obj_end_y = bg_mask.shape[0]
+        obj_start_y = obj_end_y - obj_height
+    assert(obj_end_x-obj_start_x == obj_width)
+    assert(obj_end_y-obj_start_y == obj_height)
+    cimg = np.full((bg_mask.shape[0], bg_mask.shape[1]), 0, np.uint8)
+    cimg[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = person_mask
+    occlusion_mask = cv2.bitwise_and(bg_mask, cimg)
+    number_pixel_person = np.transpose(np.where(person_mask > 0)).shape[0]
+    number_pixel_occlusion =  np.transpose(np.where(occlusion_mask > 0)).shape[0]
 
+    return number_pixel_occlusion/number_pixel_person > occlusion_rate
+
+def suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, y, h):
+    gray_bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_RGB2GRAY)
+
+    bg_height = gray_bg_mask.shape[0]
+    bg_width = gray_bg_mask.shape[1]
     BGroad_thresh = np.where(
-        (gray_BGmask == ground_value) | (gray_BGmask == sidewalk_value) | (gray_BGmask == road_value), gray_BGmask, 0)
+        (gray_bg_mask == ground_value) | (gray_bg_mask == sidewalk_value) | (gray_bg_mask == road_value), gray_bg_mask, 0)
 
-    BGroad_contours, BGroad_hierarchy = cv2.findContours(BGroad_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    contour_areas = [cv2.contourArea(contour) for contour in BGroad_contours]
+    bg_road_contours, _ = cv2.findContours(BGroad_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contour_areas = [cv2.contourArea(contour) for contour in bg_road_contours]
 
     area_id = contour_areas.index(max(contour_areas))
     y_max = y + h
-    bg_mask = np.full((BGheight, BGwidth), 0, np.uint8)
-    bg_mask = cv2.drawContours(bg_mask, BGroad_contours, contourIdx=area_id, color=255, thickness=-1)
+    bg_mask = np.full((bg_height, bg_width), 0, np.uint8)
+    bg_mask = cv2.drawContours(bg_mask, bg_road_contours, contourIdx=area_id, color=255, thickness=-1)
 
     bg_mask[y_max:,:] = 0
 
-    place_koordinates = np.where(bg_mask == 255)
+    return np.where(bg_mask == 255)
+
+def force_occlusion(bg_mask, person_mask, ground_value, sidewalk_value, road_value, obstacle_values, y, h, occlusion_rate):
+    gray_bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_RGB2GRAY)
+    bg_obstacle_tresh = np.full((gray_bg_mask.shape[0], gray_bg_mask.shape[1]), 0, np.uint8)
+    for obstacle_value in obstacle_values:
+        bg_obstacle_tresh = bg_obstacle_tresh + np.where(gray_bg_mask == obstacle_value, gray_bg_mask, 0).astype(np.uint8)
+    _, person_mask_binary = cv2.threshold(cv2.cvtColor(person_mask, cv2.COLOR_RGB2GRAY), 1, 255, cv2.THRESH_BINARY)
+    person_height = person_mask_binary.shape[0]; person_width = person_mask_binary.shape[1]
+    place_coordinates = np.transpose(suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, y, h))
+    old_x = 10000
+    old_y = 10000
+    for x, y in place_coordinates:
+        dx = x.item() - old_x
+        dy = y.item() - old_y
+        if (abs(dx) < 2*person_width and abs(dy) < person_height/2):
+            continue
+        else:
+            if test_for_occlusion(x, y, bg_obstacle_tresh, person_mask_binary, occlusion_rate):
+                return x, y
+            else:
+                old_x = x; old_y = y
+    raise IOError("No occlusions")
+
+# Random place finading
+def random_place_finder(BGmask, ground_value, sidewalk_value, road_value, y, h):
+    place_koordinates = suitable_place_finder(BGmask, ground_value, sidewalk_value, road_value, y, h)
     size_road_value = len(place_koordinates[0])
     if size_road_value == 0:
         raise IOError("didn't road find")
     else:
         random_place = random.randrange(size_road_value)
-        stand_y, stand_x = np.array([place_koordinates[0][random_place], place_koordinates[1][random_place]])
-        return stand_y, stand_x
+        bottom_pixel_person = np.array([place_koordinates[0][random_place], place_koordinates[1][random_place]])
+        return bottom_pixel_person
 
 # Size of person finding
 def person_size_finder(stand_y, w, h, obj_height, obj_width):
