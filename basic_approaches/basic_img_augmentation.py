@@ -10,10 +10,12 @@ from reprint import output
 import random
 import numpy as np
 import matplotlib.pyplot as plt
-from geometric_transformations import *
 from multiprocessing import Lock, Process, Queue, current_process, Value
 from ctypes import c_char_p
 import queue
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from basic_approaches.geometric_transformations import *
 
 # Background
 road_value = 7
