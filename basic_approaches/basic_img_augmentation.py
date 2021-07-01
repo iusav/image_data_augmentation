@@ -254,7 +254,7 @@ if __name__ == '__main__':
     parser.add_argument('--output-path', dest='output_path', default=DEFAULT_OUTPUT_PATH, help='Choose where the created images are saved to.')
     parser.add_argument('--fg', dest='fgPaths', default=DEFAULT_FG_PATH, help='Select the json files which where created by the path_creating script.')
     parser.add_argument('--bg', dest='bgPaths', default=DEFAULT_BG_PATH, help='Select the json files which where created by the path_creating script.')
-    parser.add_argument('--process', dest='num_processes', default=DEFAULT_NUMBER_PROCESSES, help='Select the number of processes.')
+    parser.add_argument('--process', dest='num_processes', type=int, default=DEFAULT_NUMBER_PROCESSES, help='Select the number of processes.')
     parser.add_argument('--force_occlusion', dest='force_occlusion', default=DEFAULT_OCCLUSION_FLAG, type=bool, help='Forces occlusion of pedestrians with objects.')
     parser.add_argument('--min_occlusion_ratio', dest='min_occlusion_ratio', default=DEFAULT_MIN_OCCLUSION_RATIO, type=float, help='Set the occlusion ratio of the pedestrian.')
 
