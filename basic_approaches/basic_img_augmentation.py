@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Lock, Process, Queue, current_process, Value
 from ctypes import c_char_p
 import queue
+import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from basic_approaches.geometric_transformations import *
@@ -51,11 +52,14 @@ class ShutdownException(Exception):
 
 
 class AugmentationWorkerManager(multiprocessing.Process):
-    def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list):
+    def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list, save_directory):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.workers = []
         self.task_queue = task_queue
+        self.save_directory = save_directory
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename=os.path.join(save_directory, 'augmentation.log'),
+                    filemode='w')
         # set up workers.
         for i in range(num_workers):
             worker = AugmentationWorker(task_queue, fg_path_list, bg_path_list)
@@ -182,7 +186,8 @@ class AugmentationWorker:
         )
         self.state.value = b"Saving..."
         # Data saving
-        data_saver(bg_name, fg_bg_img, fg_bg_mask, task_id)
+        _, img_path = data_saver(bg_name, fg_bg_img, fg_bg_mask, task_id)
+        logging.debug(f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person_x} Y: {bottom_pixel_person_y}\n Object W: {stand_obj_width} H: {stand_obj_height}\n")
 
     def augmentImage(self, task_queue, fg_path_list, bg_path_list):
         while True:
@@ -266,7 +271,7 @@ def data_saver(data_name, img, mask, id_data):
     cv2.imwrite(img_path, img)
     cv2.imwrite(mask_path, mask)
 
-    return current_id
+    return current_id, img_path
 
 
 def current_id():
@@ -391,8 +396,7 @@ if __name__ == "__main__":
         task_queue.put(i)
 
     manager = AugmentationWorkerManager(
-        num_processes, task_queue, fg_path_list, bg_path_list
-    )
+        num_processes, task_queue, fg_path_list, bg_path_list, save_directory)
     manager.start()
     while not task_queue.empty and len(manager.workers) > 1:
         print("Done!")
