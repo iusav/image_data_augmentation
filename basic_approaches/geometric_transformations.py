@@ -349,6 +349,7 @@ def fg_bg_preprocesser(
 
     foreground = resized_obj_img
     background = fg_bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x] / 255.0
+    part_fg_bg_img = blend(foreground, background, alpha) * 255
     fg_bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = part_fg_bg_img
 
     fg_bg_mask[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = resized_obj_mask
