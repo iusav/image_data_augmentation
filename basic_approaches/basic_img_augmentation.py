@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 import cv2
@@ -42,9 +43,12 @@ class textcolor:
 
 class FailedAugmentation(Exception):
     pass
-
-class AugmentationWorkerManager:
+class ShutdownException(Exception):
+    pass
+class AugmentationWorkerManager(multiprocessing.Process):
     def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list):
+        multiprocessing.Process.__init__(self)
+        self.exit = multiprocessing.Event()
         self.workers = []
         self.task_queue = task_queue
         # set up workers. Is num_workers-1 because one thread is reserved for the worker manager
@@ -52,20 +56,26 @@ class AugmentationWorkerManager:
             worker = AugmentationWorker(task_queue, fg_path_list, bg_path_list)
             self.workers.append(worker)
             worker.p.start()
-        manager = Process(target=self.monitorProcesses)
-        manager.start()
 
-        for worker in self.workers:
-            worker.p.join()
+        # for worker in self.workers:
+        #     worker.p.join()
 
-    def monitorProcesses(self):
+    def run(self):
         # this process continously updates the print inside the console to show the current state for each worker
         with output(output_type="dict", interval=0) as output_lines:
-            while True:
+            while not self.exit.is_set():
                 output_lines["Images left on the queue: "] = self.task_queue.qsize()
+                if len(self.workers) == 1:
+                    self.exit.set()
                 for i, worker in enumerate(self.workers,1):
-                    output_lines["Worker {}".format(i)] = worker.state.value.decode()
-                time.sleep(0.1)
+                    if not worker.state.value == b'Shutdown':
+                        try:
+                            output_lines["Worker {}".format(i)] = worker.state.value.decode()
+                        except UnicodeDecodeError:
+                            pass
+                    else:
+                        self.workers.remove(worker)
+                time.sleep(0.5)
 
 class AugmentationWorker:
     def __init__(self, task_queue, fg_path_list, bg_path_list):
@@ -165,15 +175,20 @@ class AugmentationWorker:
                 task = task_queue.get_nowait()
                 self.augmentImageInner(fg_path_list, bg_path_list, task)
             except queue.Empty:
-                # if the queue is empty this worker can shutdowm
+                # if the queue is empty this worker can shutdown
                 self.state.value = bytes("{}Shutdown{}".format(textcolor.WARNING, textcolor.ENDC), "utf-8")
                 break
             except FailedAugmentation as e:
                 # if the augmentation failed for some reason we need to put the task back on the queue
                 task_queue.put_nowait(task)
+            except ShutdownException as e:
+                # if something goes wrong the process should be closed
+                self.state.value = bytes("Shutdown", "utf-8")
+                break
         return True
 
 def pathReader(path):
+    checkForFile(path)
     # Read paths of a CSV file
     with open(path, newline='') as fg_bg_data:
         data = json.load(fg_bg_data)
@@ -186,6 +201,9 @@ def data_name(fg_path,bg_path):
     return FGname, BGname
 
 def data_loader(fg_path,bg_path):
+    for (fg_key, fg_value), (bg_key, bg_value) in zip(fg_path.items(), bg_path.items()):
+        checkForFile(fg_value)
+        checkForFile(bg_value)
     # Foreground paths
     imgFG_path = fg_path["img"]; maskFG_path = fg_path["mask"]
 
@@ -227,6 +245,10 @@ def current_id():
         current_id = int(len(path_list)+1)
     return current_id
 
+def checkForFile(path):
+    if not os.path.isfile(path):
+        print(f"I can't find a file at {path}.")
+        raise(ShutdownException)
 def checkForFolder(folder):
     # check if folder structure exists
     folders = [folder, os.path.join(folder, 'img'), os.path.join(folder, 'mask')]
@@ -288,7 +310,7 @@ if __name__ == '__main__':
         task_queue.put(i)
 
     manager = AugmentationWorkerManager(num_processes, task_queue, fg_path_list, bg_path_list)
-    while not task_queue.empty:
-        pass
-    print("----------------- %s seconds ----------------" % ( round((time.time() - start_time), 2) ))
+    manager.start()
+    while not task_queue.empty and len(manager.workers) > 1:
+        print("Done!")
     sys.exit(0)
