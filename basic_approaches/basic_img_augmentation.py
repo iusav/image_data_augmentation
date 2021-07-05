@@ -56,8 +56,8 @@ class AugmentationWorkerManager(multiprocessing.Process):
         self.exit = multiprocessing.Event()
         self.workers = []
         self.task_queue = task_queue
-        # set up workers. Is num_workers-1 because one thread is reserved for the worker manager
-        for i in range(num_workers - 1):
+        # set up workers.
+        for i in range(num_workers):
             worker = AugmentationWorker(task_queue, fg_path_list, bg_path_list)
             self.workers.append(worker)
             worker.p.start()
@@ -72,7 +72,7 @@ class AugmentationWorkerManager(multiprocessing.Process):
                 output_lines["Images left on the queue: "] = self.task_queue.qsize()
                 if len(self.workers) == 1:
                     self.exit.set()
-                for i, worker in enumerate(self.workers, 1):
+                for i, worker in enumerate(self.workers, 0):
                     if not worker.state.value == b"Shutdown":
                         try:
                             output_lines[
