@@ -135,9 +135,7 @@ class AugmentationWorker:
         obj_mask_height = obj_mask.shape[0]; obj_mask_width = obj_mask.shape[1]
         stand_obj_height, stand_obj_width = person_size_finder(bottom_pixel_person[0],
                                                                 w,
-                                                                h,
-                                                                obj_mask_height,
-                                                                obj_mask_width)
+                                                                h)
         self.state.value = b"Matting.."
         # Img and mask of object resizing
         # Matting function using

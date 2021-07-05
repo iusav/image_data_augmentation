@@ -132,7 +132,7 @@ def random_place_finder(BGmask, ground_value, sidewalk_value, road_value, y, h):
         return bottom_pixel_person
 
 # Size of person finding
-def person_size_finder(stand_y, w, h, obj_height, obj_width):
+def person_size_finder(obj_pos_y, obj_width, obj_height):
     # To find the size of the person, we assume that
     # person has a certain size at two different
     # positions.Let's write the two equations and solve them
@@ -146,10 +146,10 @@ def person_size_finder(stand_y, w, h, obj_height, obj_width):
     # solve = [a, b]
     solve = [1.37, -569.57]
 
-    stand_obj_height = round(solve[0] * stand_y + solve[1])
-    stand_obj_width = round(w / h * stand_obj_height)
+    new_obj_height = round(solve[0] * obj_pos_y + solve[1])
+    new_obj_width = round(obj_width / obj_height* new_obj_height)
 
-    return stand_obj_height, stand_obj_width
+    return new_obj_height, new_obj_width
 
 # Matting function
 def border_blender(img, mask):
