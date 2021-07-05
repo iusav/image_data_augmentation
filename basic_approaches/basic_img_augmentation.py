@@ -124,7 +124,7 @@ class AugmentationWorker:
         self.state.value = b"Preprocess objects..."
         # Object preprocessing
         try:
-            obj_img, obj_mask, x, y, w, h = obj_preprocesser(
+            obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = obj_preprocesser(
                 flip_fg_img,
                 flip_fg_mask,
                 bg_height,
@@ -146,13 +146,13 @@ class AugmentationWorker:
                     sidewalk_value,
                     road_value,
                     obstacle_values,
-                    y,
-                    h,
+                    obj_rect_y,
+                    obj_rect_h,
                     min_occlusion_ratio,
                 )
             else:
-                bottom_pixel_person = random_place_finder(
-                    flip_bg_mask, ground_value, sidewalk_value, road_value, y, h
+                bottom_pixel_person_y, bottom_pixel_person_x = random_place_finder(
+                    flip_bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h
                 )
         except IOError:
             raise FailedAugmentation("Could not find any road to place the object on.")
@@ -160,7 +160,7 @@ class AugmentationWorker:
         obj_mask_height = obj_mask.shape[0]
         obj_mask_width = obj_mask.shape[1]
         stand_obj_height, stand_obj_width = person_size_finder(
-            bottom_pixel_person[0], w, h
+            bottom_pixel_person_y, obj_rect_w, obj_rect_h
         )
         self.state.value = b"Matting.."
         # Img and mask of object resizing
@@ -176,8 +176,8 @@ class AugmentationWorker:
             alpha,
             flip_bg_img,
             flip_bg_mask,
-            bottom_pixel_person[0],
-            bottom_pixel_person[1],
+            bottom_pixel_person_x,
+            bottom_pixel_person_y,
             stand_obj_height,
             stand_obj_width,
             bg_height,

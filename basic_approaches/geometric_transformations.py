@@ -43,7 +43,7 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
         raise IOError("didn't person find")
     else:
         person_id = np.random.choice(person_ids)
-        x, y, w, h = cv2.boundingRect(obj_contours[person_id])
+        obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = cv2.boundingRect(obj_contours[person_id])
 
         obj_mask = np.full((FGheight, FGwidth), 0, np.uint8)
         obj_mask = cv2.drawContours(
@@ -54,11 +54,11 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
             thickness=-1,
         )
         obj_mask = cv2.cvtColor(obj_mask, cv2.COLOR_GRAY2RGB)
-        obj_mask = obj_mask[y : y + h, x : x + w]
+        obj_mask = obj_mask[obj_rect_y : obj_rect_y + obj_rect_h, obj_rect_x : obj_rect_x + obj_rect_w]
 
-        obj_img = FGimg[y : y + h, x : x + w]
+        obj_img = FGimg[obj_rect_y : obj_rect_y + obj_rect_h, obj_rect_x : obj_rect_x + obj_rect_w]
 
-        return obj_img, obj_mask, x, y, w, h
+        return obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h
 
 
 def test_for_occlusion(x, y, bg_mask, person_mask, occlusion_rate):
@@ -89,7 +89,7 @@ def test_for_occlusion(x, y, bg_mask, person_mask, occlusion_rate):
     return number_pixel_occlusion / number_pixel_person > occlusion_rate
 
 
-def suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, y, h):
+def suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h):
     gray_bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_RGB2GRAY)
 
     bg_height = gray_bg_mask.shape[0]
@@ -108,7 +108,7 @@ def suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, y, 
     contour_areas = [cv2.contourArea(contour) for contour in bg_road_contours]
 
     area_id = contour_areas.index(max(contour_areas))
-    y_max = y + h
+    y_max = obj_rect_y + obj_rect_h
     bg_mask = np.full((bg_height, bg_width), 0, np.uint8)
     bg_mask = cv2.drawContours(
         bg_mask, bg_road_contours, contourIdx=area_id, color=255, thickness=-1
@@ -165,17 +165,17 @@ def force_occlusion(
 
 
 # Random place finading
-def random_place_finder(bg_mask, ground_value, sidewalk_value, road_value, y, h):
-    place_koordinates = suitable_place_finder(
-        bg_mask, ground_value, sidewalk_value, road_value, y, h
+def random_place_finder(bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h):
+    place_coordinates = suitable_place_finder(
+        bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h
     )
-    size_road_value = len(place_koordinates[0])
+    size_road_value = len(place_coordinates[0])
     if size_road_value == 0:
         raise IOError("didn't road find")
     else:
         random_place = random.randrange(size_road_value)
         bottom_pixel_person = np.array(
-            [place_koordinates[0][random_place], place_koordinates[1][random_place]]
+            [place_coordinates[0][random_place], place_coordinates[1][random_place]]
         )
         return bottom_pixel_person
 
@@ -295,11 +295,11 @@ def obj_resizer(obj_img, obj_mask, stand_obj_height, stand_obj_width, person_val
     return resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask
 
 
-def get_obj_start_end(x, y, width, height):
-    obj_start_y = y - height
-    obj_start_x = x - width // 2
-    obj_end_y = y
-    obj_end_x = obj_start_x + width
+def get_obj_start_end(obj_bottom_x, obj_bottom_y, obj_width, obj_height):
+    obj_start_y = obj_bottom_y - obj_height
+    obj_start_x = obj_bottom_x - obj_width // 2
+    obj_end_y = obj_bottom_y
+    obj_end_x = obj_start_x + obj_width
     return obj_start_x, obj_start_y, obj_end_x, obj_end_y
 
 
@@ -310,8 +310,8 @@ def fg_bg_preprocesser(
     alpha,
     background,
     background_mask,
-    stand_x,
-    stand_y,
+    bottom_pixel_person_x,
+    bottom_pixel_person_y,
     stand_obj_height,
     stand_obj_width,
     bg_height,
@@ -320,7 +320,7 @@ def fg_bg_preprocesser(
 ):
     fg_bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
     obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(
-        stand_x, stand_y, stand_obj_width, stand_obj_height
+        bottom_pixel_person_x, bottom_pixel_person_y, stand_obj_width, stand_obj_height
     )
     if obj_start_y < 0:
         resized_obj_img = resized_obj_img[-obj_start_y:, :]
