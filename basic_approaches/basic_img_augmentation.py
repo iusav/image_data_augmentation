@@ -66,8 +66,6 @@ class AugmentationWorkerManager(multiprocessing.Process):
             self.workers.append(worker)
             worker.p.start()
 
-        for worker in self.workers:
-            worker.p.join()
 
     def run(self):
         # this process continously updates the print inside the console to show the current state for each worker
