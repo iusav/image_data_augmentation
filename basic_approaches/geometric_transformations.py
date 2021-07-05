@@ -235,9 +235,9 @@ def obj_resizer(obj_img, obj_mask,
 
     return resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask
 def get_obj_start_end(x, y, width, height):
-    obj_start_y = y
+    obj_start_y = y - height
     obj_start_x = x - width // 2
-    obj_end_y = y + height
+    obj_end_y = y
     obj_end_x = obj_start_x + width
     return obj_start_x, obj_start_y, obj_end_x, obj_end_y
 
@@ -247,8 +247,8 @@ def fg_bg_preprocesser(resized_obj_img,
                        alpha,
                        background,
                        background_mask,
-                       stand_y,
                        stand_x,
+                       stand_y,
                        stand_obj_height,
                        stand_obj_width,
                        BGheight,
@@ -261,6 +261,11 @@ def fg_bg_preprocesser(resized_obj_img,
         resized_obj_mask = resized_obj_mask[-obj_start_y:, :]
         alpha = alpha[-obj_start_y:, :]
         obj_start_y = 0
+    elif obj_end_y > BGheight:
+        resized_obj_img = resized_obj_img[:(BGheight-obj_start_y), :]
+        resized_obj_mask = resized_obj_mask[:(BGheight-obj_start_y), :]
+        alpha = alpha[:(BGheight-obj_start_y), :]
+        obj_end_y = BGheight
 
     if obj_start_x < 0:
         resized_obj_img = resized_obj_img[:, -obj_start_x:]
