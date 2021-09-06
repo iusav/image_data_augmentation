@@ -160,6 +160,8 @@ class AugmentationWorker:
         stand_obj_height, stand_obj_width = person_size_finder(
             bottom_pixel_person_y, obj_rect_w, obj_rect_h
         )
+        if stand_obj_height < 0 or stand_obj_width < 0 :
+           raise FailedAugmentation()
         self.state.value = b"Matting.."
         # Img and mask of object resizing
         # Matting function using
