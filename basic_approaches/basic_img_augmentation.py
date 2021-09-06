@@ -260,7 +260,7 @@ def data_saver(data_name, img, mask, id_data):
     mask = cv2.cvtColor(mask, cv2.COLOR_RGB2BGR)
 
     img_path = os.path.join(
-        save_directory, "img", data_name + "_" + str(id_data) + ".jpg"
+        save_directory, "img", data_name + "_" + str(id_data) + ".png"
     )
     mask_path = os.path.join(
         save_directory, "mask", data_name + "_" + str(id_data) + ".png"
