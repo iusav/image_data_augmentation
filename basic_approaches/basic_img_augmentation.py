@@ -26,10 +26,10 @@ sidewalk_value = 8
 
 # Foreground
 person_value = 24
+aug_person_value=50
 
 # Occlusion
-obstacle_values = [13, 14, 15, 17, 19, 20, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
-
+obstacle_values = [13, 14, 15 ,17, 19, 20, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 50]
 
 class textcolor:
     HEADER = "\033[95m"
@@ -180,7 +180,7 @@ class AugmentationWorker:
             stand_obj_width,
             bg_height,
             bg_width,
-            person_value,
+            aug_person_value,
         )
         self.state.value = b"Saving..."
         # Data saving
