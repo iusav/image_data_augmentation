@@ -44,8 +44,12 @@ class textcolor:
 
 
 class FailedAugmentation(Exception):
-    pass
+    def __init__(self, msg=''):
+        self.msg = msg
+        logging.debug(msg)  # use your logging things here
 
+    def __str__(self):
+        return self.msg
 
 class ShutdownException(Exception):
     pass
@@ -131,8 +135,8 @@ class AugmentationWorker:
                 fg_height,
                 fg_width,
             )
-        except OSError:
-            raise FailedAugmentation()
+        except OSError as e:
+            raise FailedAugmentation(e)
         self.state.value = b"Find random place..."
         # Random place finding
         try:

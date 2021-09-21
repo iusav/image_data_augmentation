@@ -61,7 +61,7 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
 
     person_ids = np.where(obj_areas_ratio >= obj_bg_ratio)[0]
     if len(person_ids) == 0:
-        raise IOError("didn't person find")
+        raise IOError("Didn't find a suiting person in the image.")
     else:
         person_id = np.random.choice(person_ids)
         obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = cv2.boundingRect(objContours[person_id][0])
