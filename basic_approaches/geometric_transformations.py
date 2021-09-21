@@ -282,11 +282,9 @@ def fg_bg_preprocesser(resized_obj_img,
                        ):
     fg_bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
     bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
-    obj_start_y = bottom_pixel_person_y - stand_obj_height
-    obj_start_x = bottom_pixel_person_x - stand_obj_width // 2
-    obj_end_y = bottom_pixel_person_y
-    obj_end_x = obj_start_x + stand_obj_width
-
+    obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(
+        bottom_pixel_person_x, bottom_pixel_person_y, stand_obj_width, stand_obj_height
+    )
     if obj_start_y < 0:
         resized_obj_img = resized_obj_img[-obj_start_y:, :]
         resized_obj_mask = resized_obj_mask[-obj_start_y:, :]
