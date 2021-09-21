@@ -24,5 +24,6 @@ path_creating/.ipynb_checkpoints/
 
 *.csv
 *.json
-
+*.png
+*.jpg
 
