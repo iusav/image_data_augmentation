@@ -162,20 +162,18 @@ class AugmentationWorker:
         )
         if stand_obj_height < 0 or stand_obj_width < 0:
             raise FailedAugmentation()
-        self.state.value = b"Matting.."
+        self.state.value = b"Blending.."
         # Img and mask of object resizing
-        # Matting function using
         try:
-            resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = obj_resizer(
+            resized_obj_img, resized_obj_mask = obj_resizer(
                 obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value
             )
         except ValueError:
             raise FailedAugmentation("Trimap did not contain any values=0")
         # Foreground and background preprocessing
-        fg_bg_img, fg_bg_mask = fg_bg_preprocesser(
+        fg_bg_img, fg_bg_mask, alpha_mask = fg_bg_preprocesser(
             resized_obj_img,
-            smoother_mask,
-            alpha,
+            resized_obj_mask,
             flip_bg_img,
             flip_bg_mask,
             bottom_pixel_person_x,
@@ -188,7 +186,7 @@ class AugmentationWorker:
         )
         self.state.value = b"Saving..."
         # Data saving
-        _, img_path = data_saver(bg_name, fg_bg_img, fg_bg_mask, task_id)
+        _, img_path = data_saver(bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id)
         logging.debug(f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person_x} Y: {bottom_pixel_person_y}\n Object W: {stand_obj_width} H: {stand_obj_height}\n")
 
     def augmentImage(self, task_queue, fg_path_list, bg_path_list):
@@ -259,7 +257,7 @@ def data_loader(fg_path, bg_path):
     return fg_img, fg_mask, bg_img, bg_mask, camera_dict
 
 
-def data_saver(data_name, img, mask, id_data):
+def data_saver(data_name, img, mask, alpha_mask, id_data):
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     mask = cv2.cvtColor(mask, cv2.COLOR_RGB2BGR)
 
@@ -269,9 +267,13 @@ def data_saver(data_name, img, mask, id_data):
     mask_path = os.path.join(
         save_directory, "mask", data_name + "_" + str(id_data) + ".png"
     )
+    alpha_mask_path = os.path.join(
+        save_directory, "gp-gan_predict", "alpha_mask", data_name + "_" + str(id_data) + ".png"
+    )
 
     cv2.imwrite(img_path, img)
     cv2.imwrite(mask_path, mask)
+    cv2.imwrite(alpha_mask_path, alpha_mask)
 
     return current_id, img_path
 
@@ -294,7 +296,7 @@ def checkForFile(path):
 
 def checkForFolder(folder):
     # check if folder structure exists
-    folders = [folder, os.path.join(folder, "img"), os.path.join(folder, "mask")]
+    folders = [folder, os.path.join(folder, "img"), os.path.join(folder, "mask"), os.path.join(folder, "gp-gan_predict", "alpha_mask")]
     for f in folders:
         try:
             os.makedirs(f)

@@ -3,7 +3,7 @@
 import cv2
 import numpy as np
 import random
-from pymatting import *
+
 
 # Data fliping
 def data_fliper(img, mask):
@@ -22,10 +22,31 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
     gray_FGmask = cv2.cvtColor(FGmask, cv2.COLOR_RGB2GRAY)
     obj_thresh = np.where(gray_FGmask == person_value, 255, 0).astype(np.uint8)
 
-    obj_contours, obj_hierarchy = cv2.findContours(
-        obj_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-    )
-    obj_areas = [cv2.contourArea(obj_contour) for obj_contour in obj_contours]
+    contours, hierarchy = cv2.findContours(obj_thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Finding the hierarchy for each object
+    objHierarchy = []
+    objContours = []
+    row_hierarchy = None
+    contour = None
+    for i in range(hierarchy.shape[1]):
+        if hierarchy[0][i][-1] == -1:
+            if (row_hierarchy is not None):
+                objHierarchy.append([row_hierarchy])
+                objContours.append(contour)
+
+            row_hierarchy = []
+            contour = []
+
+        row_hierarchy.append(hierarchy[0][i].tolist())
+        contour.append(contours[i])
+
+        if (row_hierarchy is not None and hierarchy.shape[1] == i + 1):
+            objHierarchy.append([row_hierarchy])
+            objContours.append(contour)
+
+    # List of Areas
+    obj_areas = [cv2.contourArea(objContour[0]) for objContour in objContours]
 
     # Ratio between object and background area
     # Min ratio for object chosing
@@ -33,9 +54,9 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
     # can change obj_bg_ratio, for Example obj_bg_ratio = 0.005
     obj_bg_ratio = 0.01
 
-    bg_area = int(BGheight * BGwidth)
+    fg_area = int(FGheight * FGwidth)
 
-    obj_areas_ratio = [obj_area / bg_area for obj_area in obj_areas]
+    obj_areas_ratio = [obj_area / fg_area for obj_area in obj_areas]
     obj_areas_ratio = np.array(obj_areas_ratio)
 
     person_ids = np.where(obj_areas_ratio >= obj_bg_ratio)[0]
@@ -43,23 +64,35 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
         raise IOError("didn't person find")
     else:
         person_id = np.random.choice(person_ids)
-        obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = cv2.boundingRect(obj_contours[person_id])
+        obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = cv2.boundingRect(objContours[person_id][0])
 
         obj_mask = np.full((FGheight, FGwidth), 0, np.uint8)
-        obj_mask = cv2.drawContours(
-            obj_mask,
-            obj_contours,
-            contourIdx=person_id,
-            color=person_value,
-            thickness=-1,
-        )
-        obj_mask = cv2.cvtColor(obj_mask, cv2.COLOR_GRAY2RGB)
-        obj_mask = obj_mask[obj_rect_y : obj_rect_y + obj_rect_h, obj_rect_x : obj_rect_x + obj_rect_w]
+        obj_mask = cv2.drawContours(obj_mask, objContours[person_id], contourIdx=-1, color=person_value, thickness=-1)
 
-        obj_img = FGimg[obj_rect_y : obj_rect_y + obj_rect_h, obj_rect_x : obj_rect_x + obj_rect_w]
+        # croped object checking
+        topX_count = np.count_nonzero(obj_mask[obj_rect_y, obj_rect_x:obj_rect_x + obj_rect_w - 1] == person_value)  # np.unique(obj_mask[0,:])
 
-        return obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h
+        downX_count = np.count_nonzero(
+            obj_mask[obj_rect_y + obj_rect_h - 1, obj_rect_x:obj_rect_x + obj_rect_w - 1] == person_value)  # np.unique(obj_mask[obj_mask.shape[0]-1, :])
 
+        leftY_count = np.count_nonzero(obj_mask[obj_rect_y:obj_rect_y + obj_rect_h - 1, obj_rect_x] == person_value)  # np.unique(obj_mask[:, 0])
+
+        reightY_count = np.count_nonzero(
+            obj_mask[obj_rect_y:obj_rect_y + obj_rect_h - 1, obj_rect_x + obj_rect_w - 1] == person_value)  # np.unique(obj_mask[:, obj_mask.shape[1]-1])
+
+        crop_ratio = 1000
+        crop_val = int(obj_areas[person_id] / crop_ratio)
+
+        if (crop_val <= topX_count) or (crop_val <= downX_count) or (crop_val <= leftY_count) or (
+                crop_val <= reightY_count):
+            raise IOError("object is resized")
+        else:
+            obj_mask = cv2.cvtColor(obj_mask, cv2.COLOR_GRAY2RGB)
+            obj_mask = obj_mask[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
+
+            obj_img = FGimg[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
+
+            return  obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h
 
 def test_for_occlusion(x, y, bg_mask, person_mask, occlusion_rate):
     obj_height = person_mask.shape[0]
@@ -201,80 +234,6 @@ def person_size_finder(obj_pos_y, obj_width, obj_height):
     return new_obj_height, new_obj_width
 
 
-# Matting function
-def border_blender(img, mask):
-    def blur_parameter_finder(mask):
-        M_kern = np.array([[100000.0, 1.0], [7000.0, 1.0]])
-        v_kern = np.array([11.0, 5.0])
-        solve_kern = np.linalg.solve(M_kern, v_kern)
-
-        M_iter = np.array([[100000.0, 1.0], [7000.0, 1.0]])
-        v_iter = np.array([2.0, 2.0])
-        solve_iter = np.linalg.solve(M_iter, v_iter)
-
-        gray_mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
-        mask_contours, mask_hierarchy = cv2.findContours(
-            gray_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-        )
-
-        mask_area = cv2.contourArea(mask_contours[0])
-
-        kern_value = round(solve_kern[0] * mask_area + solve_kern[1])
-        iter_value = round(solve_iter[0] * mask_area + solve_iter[1])
-
-        return kern_value, iter_value
-
-    def trimap_creater(mask):
-        kernel_value, iteration_value = blur_parameter_finder(mask)
-        eros_iter_value = iteration_value
-        dil_iter_value = iteration_value
-
-        kernel = np.ones((kernel_value, kernel_value), np.uint8)
-
-        copy_er_mask = mask.copy()
-        mask_erosion = cv2.erode(copy_er_mask, kernel, iterations=eros_iter_value)
-        mask_erosion = np.where(mask_erosion == 0, 0, 255).astype(np.uint8)
-
-        copy_dil_mask = mask.copy()
-        mask_dilation = cv2.dilate(copy_dil_mask, kernel, iterations=dil_iter_value)
-        mask_dilation = np.where(mask_dilation == 0, 0, 128).astype(np.uint8)
-
-        added_masks = cv2.add(mask_erosion, mask_dilation)
-
-        return added_masks
-
-    def matting(img, trimap):
-        img = img / 255.0
-        trimap = cv2.cvtColor(trimap, cv2.COLOR_RGB2GRAY)
-        trimap = trimap / 255.0
-        alpha = estimate_alpha_cf(img, trimap)
-
-        # estimate foreground from image and alpha
-        foreground = estimate_foreground_ml(img, alpha)
-
-        return foreground, alpha
-
-    def border_smoother(mask):
-        kernel = np.ones((5, 5), np.uint8)
-        opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-
-        return opening
-
-    trimap_mask = trimap_creater(mask)
-    new_img, alpha = matting(img, trimap_mask)
-    new_mask = (alpha * 255).astype(np.uint8)
-    new_mask = np.where(new_mask >= 110, 255, 0).astype(np.uint8)
-    border_smoother_mask = border_smoother(new_mask)
-    smoother_mask = np.full(
-        (border_smoother_mask.shape[0], border_smoother_mask.shape[1], 3), 0, np.uint8
-    )
-    smoother_mask[:, :, 0] = border_smoother_mask
-    smoother_mask[:, :, 1] = border_smoother_mask
-    smoother_mask[:, :, 2] = border_smoother_mask
-
-    return new_img, new_mask, alpha, smoother_mask, trimap_mask
-
-
 # Img and mask of object resizing
 def obj_resizer(obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value):
     resized_obj_img = cv2.resize(
@@ -287,12 +246,7 @@ def obj_resizer(obj_img, obj_mask, stand_obj_height, stand_obj_width, person_val
         (stand_obj_width, stand_obj_height),
         interpolation=cv2.INTER_NEAREST,
     )
-
-    resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = border_blender(
-        resized_obj_img, resized_obj_mask
-    )
-
-    return resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask
+    return resized_obj_img, resized_obj_mask
 
 
 def get_obj_start_end(obj_bottom_x, obj_bottom_y, obj_width, obj_height):
@@ -303,58 +257,67 @@ def get_obj_start_end(obj_bottom_x, obj_bottom_y, obj_width, obj_height):
     return obj_start_x, obj_start_y, obj_end_x, obj_end_y
 
 
+def borderBlender(foreground, background, alpha):
+    foreground = foreground / 255
+    background = background / 255
+
+    alpha = cv2.bitwise_not(alpha)
+    alpha = alpha / 255
+
+    return ((alpha * foreground + (1 - alpha) * background)*255).astype(np.uint8)
+
+
 # Foreground and background preprocessing
-def fg_bg_preprocesser(
-    resized_obj_img,
-    resized_obj_mask,
-    alpha,
-    background,
-    background_mask,
-    bottom_pixel_person_x,
-    bottom_pixel_person_y,
-    stand_obj_height,
-    stand_obj_width,
-    bg_height,
-    bg_width,
-    person_value,
-):
+def fg_bg_preprocesser(resized_obj_img,
+                       resized_obj_mask,
+                       background,
+                       background_mask,
+                       bottom_pixel_person_x,
+                       bottom_pixel_person_y,
+                       stand_obj_height,
+                       stand_obj_width,
+                       bg_height,
+                       bg_width,
+                       person_value
+                       ):
     fg_bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
-    obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(
-        bottom_pixel_person_x, bottom_pixel_person_y, stand_obj_width, stand_obj_height
-    )
+    bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
+    obj_start_y = bottom_pixel_person_y - stand_obj_height
+    obj_start_x = bottom_pixel_person_x - stand_obj_width // 2
+    obj_end_y = bottom_pixel_person_y
+    obj_end_x = obj_start_x + stand_obj_width
+
     if obj_start_y < 0:
         resized_obj_img = resized_obj_img[-obj_start_y:, :]
         resized_obj_mask = resized_obj_mask[-obj_start_y:, :]
-        alpha = alpha[-obj_start_y:, :]
         obj_start_y = 0
-    elif obj_end_y > bg_height:
-        resized_obj_img = resized_obj_img[: (bg_height - obj_start_y), :]
-        resized_obj_mask = resized_obj_mask[: (bg_height - obj_start_y), :]
-        alpha = alpha[: (bg_height - obj_start_y), :]
-        obj_end_y = bg_height
 
     if obj_start_x < 0:
         resized_obj_img = resized_obj_img[:, -obj_start_x:]
         resized_obj_mask = resized_obj_mask[:, -obj_start_x:]
-        alpha = alpha[:, -obj_start_x:]
         obj_start_x = 0
 
     elif obj_end_x > bg_width:
-        resized_obj_img = resized_obj_img[:, : (bg_width - obj_start_x)]
-        resized_obj_mask = resized_obj_mask[:, : (bg_width - obj_start_x)]
-        alpha = alpha[:, : (bg_width - obj_start_x)]
+        resized_obj_img = resized_obj_img[:, :(bg_width - obj_start_x)]
+        resized_obj_mask = resized_obj_mask[:, :(bg_width - obj_start_x)]
         obj_end_x = bg_width
+
+    kernel = np.ones((3, 3), np.uint8)
+    erode_obj_mask = cv2.erode(resized_obj_mask, kernel, iterations=1)
+
+    ksize = (3, 3)
+    blur_obj_mask = cv2.blur(erode_obj_mask, ksize)
 
     fg_bg_img = background.copy()
 
-    foreground = resized_obj_img
-    background = fg_bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x] / 255.0
-    part_fg_bg_img = blend(foreground, background, alpha) * 255
-    fg_bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = part_fg_bg_img
+    fg_bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = resized_obj_img
+    fg_bg_mask[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = blur_obj_mask
 
-    fg_bg_mask[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = resized_obj_mask
-    fg_bg_mask = np.where(fg_bg_mask == 255, person_value, background_mask).astype(
-        np.uint8
-    )
+    bg_mask[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = erode_obj_mask
 
-    return fg_bg_img, fg_bg_mask
+    # combine foreground+background
+    overlapImg = borderBlender(background, fg_bg_img, fg_bg_mask)
+    overlapMask = np.where(bg_mask == 255, person_value, background_mask).astype(np.uint8)
+    alphaMask = fg_bg_mask
+
+    return overlapImg, overlapMask, alphaMask
