@@ -160,13 +160,17 @@ class AugmentationWorker:
         stand_obj_height, stand_obj_width = person_size_finder(
             bottom_pixel_person_y, obj_rect_w, obj_rect_h
         )
+        if stand_obj_height < 0 or stand_obj_width < 0:
+            raise FailedAugmentation()
         self.state.value = b"Matting.."
         # Img and mask of object resizing
         # Matting function using
-        resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = obj_resizer(
-            obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value
-        )
-
+        try:
+            resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = obj_resizer(
+                obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value
+            )
+        except ValueError:
+            raise FailedAugmentation("Trimap did not contain any values=0")
         # Foreground and background preprocessing
         fg_bg_img, fg_bg_mask = fg_bg_preprocesser(
             resized_obj_img,
