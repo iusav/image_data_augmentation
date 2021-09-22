@@ -18,6 +18,7 @@ import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from basic_approaches.geometric_transformations import *
+from basic_approaches.datastructures import Pixel
 
 # Background
 road_value = 7
@@ -153,7 +154,7 @@ class AugmentationWorker:
                     min_occlusion_ratio,
                 )
             else:
-                bottom_pixel_person_y, bottom_pixel_person_x = random_place_finder(
+                bottom_pixel_person= random_place_finder(
                     flip_bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h
                 )
         except IOError:
@@ -161,16 +162,17 @@ class AugmentationWorker:
         # Size of person finding
         obj_mask_height = obj_mask.shape[0]
         obj_mask_width = obj_mask.shape[1]
-        stand_obj_height, stand_obj_width = person_size_finder(
-            bottom_pixel_person_y, obj_rect_w, obj_rect_h
+        person_height = person_height_calculation(
+            bottom_pixel_person.y, obj_rect_w, obj_rect_h
         )
-        if stand_obj_height < 0 or stand_obj_width < 0:
+        person_width = obj_rect_w / obj_rect_h * person_height
+        if person_height < 0 or person_width < 0:
             raise FailedAugmentation()
         self.state.value = b"Blending.."
         # Img and mask of object resizing
         try:
             resized_obj_img, resized_obj_mask = obj_resizer(
-                obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value
+                obj_img, obj_mask, person_height, person_width, person_value
             )
         except ValueError:
             raise FailedAugmentation("Trimap did not contain any values=0")
@@ -180,10 +182,9 @@ class AugmentationWorker:
             resized_obj_mask,
             flip_bg_img,
             flip_bg_mask,
-            bottom_pixel_person_x,
-            bottom_pixel_person_y,
-            stand_obj_height,
-            stand_obj_width,
+            bottom_pixel_person,
+            person_height,
+            person_width,
             bg_height,
             bg_width,
             aug_person_value,
@@ -191,7 +192,7 @@ class AugmentationWorker:
         self.state.value = b"Saving..."
         # Data saving
         _, img_path = data_saver(bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id)
-        logging.debug(f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person_x} Y: {bottom_pixel_person_y}\n Object W: {stand_obj_width} H: {stand_obj_height}\n")
+        logging.debug(f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person.x} Y: {bottom_pixel_person.y}\n Object W: {person_width} H: {person_height}\n")
 
     def augmentImage(self, task_queue, fg_path_list, bg_path_list):
         while True:

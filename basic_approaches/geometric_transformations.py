@@ -1,9 +1,11 @@
-# Transformation/ Translation
-
 import cv2
 import numpy as np
 import random
-
+import math
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from basic_approaches.datastructures import Pixel
 
 # Data fliping
 def data_fliper(img, mask):
@@ -190,7 +192,7 @@ def force_occlusion(
             if test_for_occlusion(
                 x, y, bg_obstacle_tresh, person_mask_binary, occlusion_rate
             ):
-                return x, y
+                return Pixel(x, y)
             else:
                 old_x = x
                 old_y = y
@@ -207,32 +209,116 @@ def random_place_finder(bg_mask, ground_value, sidewalk_value, road_value, obj_r
         raise IOError("didn't road find")
     else:
         random_place = random.randrange(size_road_value)
-        bottom_pixel_person = np.array(
-            [place_coordinates[0][random_place], place_coordinates[1][random_place]]
-        )
-        return bottom_pixel_person
+        return Pixel(place_coordinates[1][random_place], place_coordinates[0][random_place])
 
+def get_rotation_matrix(params):
+    pitch = params['extrinsic']['pitch']
+    yaw = params['extrinsic']['yaw']
+    rol = params['extrinsic']['roll']
+    x11 = math.cos(yaw)*math.cos(pitch)
+    x12 = math.cos(yaw)*math.sin(pitch)*math.sin(rol)-math.sin(yaw)*math.cos(rol)
+    x13 = math.cos(yaw)*math.sin(pitch)*math.cos(rol)+math.sin(yaw)*math.sin(rol)
+    x21 = math.sin(yaw)*math.cos(pitch)
+    x22 = math.sin(yaw)*math.sin(pitch)*math.sin(rol)+math.cos(yaw)*math.cos(rol)
+    x23 = math.sin(yaw)*math.sin(pitch)*math.cos(rol)-math.cos(yaw)*math.sin(rol)
+    x31 = -math.sin(pitch)
+    x32 = math.cos(pitch)*math.sin(rol)
+    x33 = math.cos(pitch)*math.cos(rol)
+    return np.array([[x11,x12,x13],[x21,x22,x23],[x31,x32,x33]])
 
-# Size of person finding
-def person_size_finder(obj_pos_y, obj_width, obj_height):
-    # To find the size of the person, we assume that
-    # person has a certain size at two different
-    # positions.Let's write the two equations and solve them
-    # h = y*a + b
-    # h - size of the person (px)
-    # y - position (px)
+def load_camera_params(params):
+    x = params['extrinsic']['x']
+    y = params['extrinsic']['y']
+    z = params['extrinsic']['z']
 
-    # 800 = 1000*a + b
-    # 170 = 540*a + b
+    fx = params['intrinsic']['fx']
+    fy = params['intrinsic']['fy']
+    u0 = params['intrinsic']['u0']
+    v0 = params['intrinsic']['v0']
+    return x, y, z, fx, fy, u0, v0
 
-    # solve = [a, b]
-    solve = [1.37, -569.57]
+def person_height_calculation(params, position_x , position_y):
+    #Parameters
+    x, y, z, fx, fy, u0, v0 = load_camera_params(params)
 
-    new_obj_height = round(solve[0] * obj_pos_y + solve[1])
-    new_obj_width = round(obj_width / obj_height * new_obj_height)
+    # pixel
+    q = np.array([[position_x],[position_y]])
 
-    return new_obj_height, new_obj_width
+    #Translation vector
+    t = np.array([[x],[y],[z]])
 
+    #Rotation matrix
+    r = get_rotation_matrix(params)
+
+    r1 = np.transpose(r)
+    t = -np.dot(r1 , t)
+
+    #Intrinsic parameters matrix
+
+    k = np.array([[fx,0,u0],[0,fy,v0],[0,0,1]])
+    i = np.array([[0,-1,0],[0,0,-1],[1,0,0]])
+    c = np.dot(k , i)
+
+    pg = transform_point_2D_to_3D(q, r1, t, c, 0)
+    x0 = pg[0,0,0]
+    y0 = pg[0,0,1]
+    # height of a person
+    z0 = 1.77
+    pg1 = np.array([[x0],[y0],[z0]])
+    pg3 = transform_point_3D_to_2D(pg1, r1, t, c)
+    z = int(pg3[1,0])
+    height = position_y - z
+
+    return height
+
+#Pixel to world
+def transform_point_2D_to_3D(point2D, rVec, tVec, cameraMat, height):
+    """
+    Function used to convert given 2D points back to real-world 3D points
+    point2D  : An array of 2D points
+    rVec     : Rotation vector
+    tVec     : Translation vector
+    cameraMat: Camera Matrix used in solvePnP
+    height   : Height in real-world 3D space
+    Return   : output_array: Output array of 3D points
+
+    """
+    point3D = []
+    point2D = (np.array(point2D, dtype='float32')).reshape(-1, 2)
+    numPts = point2D.shape[0]
+    point2D_op = np.hstack((point2D, np.ones((numPts, 1))))
+    rMat = rVec
+    rMat_inv = np.linalg.inv(rMat)
+    kMat_inv = np.linalg.inv(cameraMat)
+    for point in range(numPts):
+        uvPoint = point2D_op[point, :].reshape(3, 1)
+        tempMat = np.matmul(rMat_inv, kMat_inv)
+        tempMat1 = np.matmul(tempMat, uvPoint)
+        tempMat2 = np.matmul(rMat_inv, tVec)
+        s = (height + tempMat2[2]) / tempMat1[2]
+        p = tempMat1 * s - tempMat2
+        point3D.append(p)
+
+    point3D = (np.array(point3D, dtype='float32')).reshape([-1, 1, 3])
+    return point3D
+
+#World to pixel
+def transform_point_3D_to_2D(point2D, rv, tv, c):
+    """
+    Function used to convert given 3D points back to 2D points
+    point2D  : An array of 3D points
+    rVec     : Rotation vector
+    tVec     : Translation vector
+    cameraMat: Camera Matrix used in solvePnP
+    Return   : output_array: Output array of 2D points
+
+    """
+    rr = np.array([[rv[0,0],rv[0,1],rv[0,2],tv[0,0]],[rv[1,0],rv[1,1],rv[1,2],tv[1,0]],[rv[2,0],rv[2,1],rv[2,2],tv[2,0]]])
+    pg2 = np.array([[point2D[0,0]],[point2D[1,0]],[point2D[2,0]],[1]])
+    a1 = np.dot(c , rr)
+    a2 = np.dot(a1 , pg2)
+    pixel = a2 / a2[2,0]
+    return pixel
 
 # Img and mask of object resizing
 def obj_resizer(obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value):
@@ -272,8 +358,7 @@ def fg_bg_preprocesser(resized_obj_img,
                        resized_obj_mask,
                        background,
                        background_mask,
-                       bottom_pixel_person_x,
-                       bottom_pixel_person_y,
+                       bottom_pixel_person,
                        stand_obj_height,
                        stand_obj_width,
                        bg_height,
@@ -283,7 +368,7 @@ def fg_bg_preprocesser(resized_obj_img,
     fg_bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
     bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
     obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(
-        bottom_pixel_person_x, bottom_pixel_person_y, stand_obj_width, stand_obj_height
+        bottom_pixel_person.x, bottom_pixel_person.y, stand_obj_width, stand_obj_height
     )
     if obj_start_y < 0:
         resized_obj_img = resized_obj_img[-obj_start_y:, :]
