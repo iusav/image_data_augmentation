@@ -5,7 +5,7 @@ import math
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from basic_approaches.datastructures import Pixel
+from utils.datastructures import Pixel
 
 # Data fliping
 def data_fliper(img, mask):
@@ -20,9 +20,9 @@ def data_fliper(img, mask):
 
 
 # Object preprocessing
-def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, FGwidth):
-    gray_FGmask = cv2.cvtColor(FGmask, cv2.COLOR_RGB2GRAY)
-    obj_thresh = np.where(gray_FGmask == person_value, 255, 0).astype(np.uint8)
+def obj_preprocesser(fg_img, fg_mask, person_value):
+    gray_fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_RGB2GRAY)
+    obj_thresh = np.where(gray_fg_mask == person_value, 255, 0).astype(np.uint8)
 
     contours, hierarchy = cv2.findContours(obj_thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -55,8 +55,8 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
     # default 0.01, i.e. obj_area / bg_area
     # can change obj_bg_ratio, for Example obj_bg_ratio = 0.005
     obj_bg_ratio = 0.01
-
-    fg_area = int(FGheight * FGwidth)
+    fg_height = fg_mask.shape[0]; fg_width = fg_mask.shape[1]
+    fg_area = int(fg_height * fg_width)
 
     obj_areas_ratio = [obj_area / fg_area for obj_area in obj_areas]
     obj_areas_ratio = np.array(obj_areas_ratio)
@@ -68,7 +68,7 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
         person_id = np.random.choice(person_ids)
         obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = cv2.boundingRect(objContours[person_id][0])
 
-        obj_mask = np.full((FGheight, FGwidth), 0, np.uint8)
+        obj_mask = np.full((fg_height, fg_width), 0, np.uint8)
         obj_mask = cv2.drawContours(obj_mask, objContours[person_id], contourIdx=-1, color=person_value, thickness=-1)
 
         # croped object checking
@@ -92,7 +92,7 @@ def obj_preprocesser(FGimg, FGmask, BGheight, BGwidth, person_value, FGheight, F
             obj_mask = cv2.cvtColor(obj_mask, cv2.COLOR_GRAY2RGB)
             obj_mask = obj_mask[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
 
-            obj_img = FGimg[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
+            obj_img = fg_img[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
 
             return  obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h
 

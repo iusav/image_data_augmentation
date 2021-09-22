@@ -1,24 +1,29 @@
 import multiprocessing
 import os
 import sys
-import cv2
-import csv
 import argparse
-import glob
+
 import time
-import json
 from reprint import output
 import random
-import numpy as np
-import matplotlib.pyplot as plt
 from multiprocessing import Lock, Process, Queue, current_process, Value
 from ctypes import c_char_p
 import queue
 import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from basic_approaches.geometric_transformations import *
-from basic_approaches.datastructures import Pixel
+from utils.geometric_transformations import *
+from utils.datastructures import Pixel
+from utils.costum_exceptions import ShutdownException, FailedAugmentation
+from utils.io_functions import (
+    path_reader,
+    data_name,
+    data_loader,
+    data_saver,
+    current_id,
+    check_for_file,
+    check_for_folder
+)
 
 # Background
 road_value = 7
@@ -42,19 +47,6 @@ class textcolor:
     ENDC = "\033[0m"
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
-
-
-class FailedAugmentation(Exception):
-    def __init__(self, msg=''):
-        self.msg = msg
-        logging.debug(msg)  # use your logging things here
-
-    def __str__(self):
-        return self.msg
-
-class ShutdownException(Exception):
-    pass
-
 
 class AugmentationWorkerManager(multiprocessing.Process):
     def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list, save_directory):
@@ -112,8 +104,6 @@ class AugmentationWorker:
         # Data loading
         self.state.value = b"loading.."
         fg_img, fg_mask, bg_img, bg_mask, camera_dict = data_loader(fg_path, bg_path)
-        fg_height = fg_mask.shape[0]
-        fg_width = fg_mask.shape[1]
         bg_height = bg_mask.shape[0]
         bg_width = bg_mask.shape[1]
 
@@ -130,11 +120,7 @@ class AugmentationWorker:
             obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = obj_preprocesser(
                 flip_fg_img,
                 flip_fg_mask,
-                bg_height,
-                bg_width,
-                person_value,
-                fg_height,
-                fg_width,
+                person_value
             )
         except OSError as e:
             raise FailedAugmentation(e)
@@ -162,10 +148,8 @@ class AugmentationWorker:
         # Size of person finding
         obj_mask_height = obj_mask.shape[0]
         obj_mask_width = obj_mask.shape[1]
-        person_height = person_height_calculation(
-            bottom_pixel_person.y, obj_rect_w, obj_rect_h
-        )
-        person_width = obj_rect_w / obj_rect_h * person_height
+        person_height = round(person_height_calculation(camera_dict, bottom_pixel_person.x, bottom_pixel_person.y))
+        person_width = round(obj_rect_w / obj_rect_h * person_height)
         if person_height < 0 or person_width < 0:
             raise FailedAugmentation()
         self.state.value = b"Blending.."
@@ -191,7 +175,7 @@ class AugmentationWorker:
         )
         self.state.value = b"Saving..."
         # Data saving
-        _, img_path = data_saver(bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id)
+        _, img_path = data_saver(save_directory, bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id)
         logging.debug(f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person.x} Y: {bottom_pixel_person.y}\n Object W: {person_width} H: {person_height}\n")
 
     def augmentImage(self, task_queue, fg_path_list, bg_path_list):
@@ -219,97 +203,6 @@ class AugmentationWorker:
                 self.state.value = bytes("Shutdown", "utf-8")
                 break
         return True
-
-
-def pathReader(path):
-    checkForFile(path)
-    # Read paths of a CSV file
-    with open(path, newline="") as fg_bg_data:
-        data = json.load(fg_bg_data)
-    return data
-
-
-def data_name(fg_path, bg_path):
-    fg_name = "_".join(fg_path["mask"].split("/")[-1].split("_")[:-2])
-    bg_name = "_".join(bg_path["mask"].split("/")[-1].split("_")[:-2])
-
-    return fg_name, bg_name
-
-
-def data_loader(fg_path, bg_path):
-    for (fg_key, fg_value), (bg_key, bg_value) in zip(fg_path.items(), bg_path.items()):
-        checkForFile(fg_value)
-        checkForFile(bg_value)
-    # Foreground paths
-    img_fg_path = fg_path["img"]
-    mask_fg_path = fg_path["mask"]
-
-    # Background paths
-    img_bg_path = bg_path["img"]
-    mask_bg_path = bg_path["mask"]
-
-    fg_img = cv2.imread(img_fg_path)
-    fg_img = cv2.cvtColor(fg_img, cv2.COLOR_BGR2RGB)
-    fg_mask = cv2.imread(mask_fg_path)
-    fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_BGR2RGB)
-
-    bg_img = cv2.imread(img_bg_path)
-    bg_img = cv2.cvtColor(bg_img, cv2.COLOR_BGR2RGB)
-    bg_mask = cv2.imread(mask_bg_path)
-    bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_BGR2RGB)
-    with open(bg_path["camera"], "r") as camera_settings:
-        camera_dict = json.load(camera_settings)
-    return fg_img, fg_mask, bg_img, bg_mask, camera_dict
-
-
-def data_saver(data_name, img, mask, alpha_mask, id_data):
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    mask = cv2.cvtColor(mask, cv2.COLOR_RGB2BGR)
-
-    img_path = os.path.join(
-        save_directory, "img", data_name + "_" + str(id_data) + ".png"
-    )
-    mask_path = os.path.join(
-        save_directory, "mask", data_name + "_" + str(id_data) + ".png"
-    )
-    alpha_mask_path = os.path.join(
-        save_directory, "gp-gan_predict", "alpha_mask", data_name + "_" + str(id_data) + ".png"
-    )
-
-    cv2.imwrite(img_path, img)
-    cv2.imwrite(mask_path, mask)
-    cv2.imwrite(alpha_mask_path, alpha_mask)
-
-    return current_id, img_path
-
-
-def current_id():
-    path_list = glob.glob(os.path.join(save_directory, "mask", "*"))
-
-    if not path_list:
-        current_id = 1
-    else:
-        current_id = int(len(path_list) + 1)
-    return current_id
-
-
-def checkForFile(path):
-    if not os.path.isfile(path):
-        print(f"I can't find a file at {path}.")
-        raise (ShutdownException)
-
-
-def checkForFolder(folder):
-    # check if folder structure exists
-    folders = [folder, os.path.join(folder, "img"), os.path.join(folder, "mask"), os.path.join(folder, "gp-gan_predict", "alpha_mask")]
-    for f in folders:
-        try:
-            os.makedirs(f)
-            print(f"Created {f}")
-        except FileExistsError:
-            # folder already exists
-            pass
-
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -385,13 +278,13 @@ if __name__ == "__main__":
     force_occlusion_flag = args.force_occlusion
     min_occlusion_ratio = args.min_occlusion_ratio
 
-    checkForFolder(save_directory)
-    fg_path_list = pathReader(fg_paths)
-    bg_path_list = pathReader(bg_paths)
+    check_for_folder(save_directory)
+    fg_path_list = path_reader(fg_paths)
+    bg_path_list = path_reader(bg_paths)
 
     start_time = time.time()
 
-    id_data = current_id()
+    id_data = current_id(save_directory)
     # id_data = 1
     if id_data >= dataset_size:
         print(
