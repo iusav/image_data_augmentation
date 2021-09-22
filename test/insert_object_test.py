@@ -57,17 +57,16 @@ class TestHeightEstimation(unittest.TestCase):
             stand_obj_height, stand_obj_width = person_size_finder(
                 person_y, self.w, self.h
             )
-            resized_obj_img, resized_obj_mask, alpha, smoother_mask, trimap_mask = obj_resizer(
+            resized_obj_img, resized_obj_mask = obj_resizer(
                 self.obj_img,
                 self.obj_mask,
                 stand_obj_height,
                 stand_obj_width,
                 person_value,
             )
-            fg_bg_img, fg_bg_mask = fg_bg_preprocesser(
+            fg_bg_img, fg_bg_mask, alpha_mask = fg_bg_preprocesser(
                 resized_obj_img,
-                smoother_mask,
-                alpha,
+                resized_obj_mask,
                 self.bg_img,
                 self.bg_mask,
                 person_x,
