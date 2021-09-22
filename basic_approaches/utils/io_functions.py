@@ -22,23 +22,28 @@ def data_name(fg_path, bg_path):
 
     return fg_name, bg_name
 
+def check_img_and_mask(img_paths):
+    for _, value in img_paths.items():
+        check_for_file(value)
 
-def data_loader(fg_path, bg_path):
-    for (fg_key, fg_value), (bg_key, bg_value) in zip(fg_path.items(), bg_path.items()):
-        check_for_file(fg_value)
-        check_for_file(bg_value)
+def fg_data_loader(fg_path):
+    check_img_and_mask(fg_path)
     # Foreground paths
     img_fg_path = fg_path["img"]
     mask_fg_path = fg_path["mask"]
-
-    # Background paths
-    img_bg_path = bg_path["img"]
-    mask_bg_path = bg_path["mask"]
 
     fg_img = cv2.imread(img_fg_path)
     fg_img = cv2.cvtColor(fg_img, cv2.COLOR_BGR2RGB)
     fg_mask = cv2.imread(mask_fg_path)
     fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_BGR2RGB)
+
+    return fg_img, fg_mask
+
+def bg_data_loader(bg_path):
+    check_img_and_mask(bg_path)
+    # Background paths
+    img_bg_path = bg_path["img"]
+    mask_bg_path = bg_path["mask"]
 
     bg_img = cv2.imread(img_bg_path)
     bg_img = cv2.cvtColor(bg_img, cv2.COLOR_BGR2RGB)
@@ -46,7 +51,7 @@ def data_loader(fg_path, bg_path):
     bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_BGR2RGB)
     with open(bg_path["camera"], "r") as camera_settings:
         camera_dict = json.load(camera_settings)
-    return fg_img, fg_mask, bg_img, bg_mask, camera_dict
+    return bg_img, bg_mask, camera_dict
 
 
 def data_saver(save_directory, data_name, img, mask, alpha_mask, id_data):

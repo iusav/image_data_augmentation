@@ -15,15 +15,16 @@ from basic_approaches.utils.costum_exceptions import (
 )
 from basic_approaches.utils.datastructures import Pixel
 from basic_approaches.utils.constants import (
-	Textcolor,
-	ground_values,
-	obstacle_values,
-	person_value,
-	aug_person_value)
+        Textcolor,
+        ground_values,
+        obstacle_values,
+        person_value,
+        aug_person_value)
 from basic_approaches.utils.io_functions import (
     data_name,
-    data_loader,
-    data_saver,
+    fg_data_loader,
+    bg_data_loader,
+    data_saver
 )
 
 
@@ -76,18 +77,7 @@ class AugmentationWorker:
         # set the state as multiprocessing value so the thread can change the value of the member variable
         self.state = Value(c_char_p, b"init")
 
-    def augmentImageInner(self, worker_params, task_id):
-        # get a random foreground and background
-        fg_path = random.choice(worker_params.fg_path_list)
-        bg_path = random.choice(worker_params.bg_path_list)
-
-        # Data name chosing
-        fg_name, bg_name = data_name(fg_path, bg_path)
-
-        # Data loading
-        self.state.value = b"loading.."
-        fg_img, fg_mask, bg_img, bg_mask, camera_dict = data_loader(fg_path, bg_path)
-
+    def add_pedestrian_to_image(self, fg_img, fg_mask, bg_img, bg_mask, camera_dict, worker_params):
         # -------- Transformation/ Translation -------- #
         # Foreground fliping
         self.state.value = b"Flip..."
@@ -150,6 +140,22 @@ class AugmentationWorker:
             person_width,
             aug_person_value,
         )
+        return fg_bg_img, fg_bg_mask, alpha_mask, bottom_pixel_person, person_width, person_height
+
+    def augmentImageInner(self, worker_params, task_id):
+        # get a random foreground and background
+        fg_path = random.choice(worker_params.fg_path_list)
+        bg_path = random.choice(worker_params.bg_path_list)
+
+        # Data name chosing
+        fg_name, bg_name = data_name(fg_path, bg_path)
+
+        # Data loading
+        self.state.value = b"loading.."
+        bg_img, bg_mask, camera_dict = bg_data_loader(bg_path)
+        fg_img, fg_mask = fg_data_loader(fg_path)
+
+        fg_bg_img, fg_bg_mask, alpha_mask, bottom_pixel_person, person_width, person_height = self.add_pedestrian_to_image(fg_img, fg_mask, bg_img, bg_mask, camera_dict, worker_params)
         self.state.value = b"Saving..."
         # Data saving
         _, img_path = data_saver(
