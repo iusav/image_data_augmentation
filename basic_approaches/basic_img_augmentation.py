@@ -39,6 +39,4 @@ if __name__ == "__main__":
         args.num_processes, task_queue, worker_params
     )
     manager.start()
-    while not task_queue.empty and len(manager.workers) > 1:
-        print("Done!")
     sys.exit(0)

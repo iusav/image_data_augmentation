@@ -35,6 +35,7 @@ class AugmentationWorkerManager(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.workers = []
+        self.dead_workers = set()
         self.task_queue = task_queue
         logging.basicConfig(
             level=logging.DEBUG,
@@ -53,20 +54,21 @@ class AugmentationWorkerManager(multiprocessing.Process):
         with output(output_type="dict", interval=0) as output_lines:
             while not self.exit.is_set():
                 output_lines["Images left on the queue: "] = self.task_queue.qsize()
-                if len(self.workers) == 1:
+                if len(self.dead_workers) == len(self.workers):
                     self.exit.set()
-                for i, worker in enumerate(self.workers, 0):
-                    if not worker.state.value == b"Shutdown":
-                        try:
-                            output_lines[
-                                "Worker {}".format(i)
-                            ] = worker.state.value.decode()
-                        except UnicodeDecodeError:
-                            pass
-                    else:
-                        self.workers.remove(worker)
+                for worker_id, worker in enumerate(self.workers, 0):
+                    if worker_id in self.dead_workers:
+                        continue
+                    try:
+                        output_lines[
+                            "Worker {}".format(worker_id)
+                        ] = worker.state.value.decode()
+                        if worker.state.value == b"Shutdown":
+                            self.dead_workers.add(worker_id)
+                    except UnicodeDecodeError:
+                        pass
                 time.sleep(0.5)
-
+        print("Done!")
 
 class AugmentationWorker:
     def __init__(self, task_queue, worker_params):
@@ -178,15 +180,14 @@ class AugmentationWorker:
                 self.augmentImageInner(params, task)
             except queue.Empty:
                 # if the queue is empty this worker can shutdown
-                self.state.value = bytes(
-                    "{}Shutdown{}".format(Textcolor.WARNING, Textcolor.ENDC), "utf-8"
-                )
+                self.state.value = b"Shutdown"
                 break
             except FailedAugmentation as e:
                 # if the augmentation failed for some reason we need to put the task back on the queue
                 task_queue.put_nowait(task)
+                self.state.value = b"Reload..."
             except ShutdownException as e:
                 # if something goes wrong the process should be closed
-                self.state.value = bytes("Shutdown", "utf-8")
+                self.state.value = b"Shutdown"
                 break
         return True
