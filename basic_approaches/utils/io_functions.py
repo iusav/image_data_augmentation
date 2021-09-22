@@ -2,7 +2,9 @@ import json
 import glob
 import os
 import cv2
+import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.costum_exceptions import ShutdownException
 
 

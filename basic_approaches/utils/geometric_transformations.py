@@ -34,6 +34,8 @@ def obj_preprocesser(fg_img, fg_mask, person_value):
     objContours = []
     row_hierarchy = None
     contour = None
+    if not contours:
+       raise IOError("Didn't find a suiting person in the image.")
     for i in range(hierarchy.shape[1]):
         if hierarchy[0][i][-1] == -1:
             if row_hierarchy is not None:
