@@ -14,14 +14,17 @@ import logging
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from basic_approaches.utils.geometric_transformations import *
 from basic_approaches.utils.datastructures import Pixel
-from basic_approaches.utils.costum_exceptions import ShutdownException, FailedAugmentation
+from basic_approaches.utils.costum_exceptions import (
+    ShutdownException,
+    FailedAugmentation,
+)
 from basic_approaches.utils.io_functions import (
     path_reader,
     data_name,
     data_loader,
     data_saver,
     current_id,
-    check_for_folder
+    check_for_folder,
 )
 
 # Background
@@ -31,10 +34,11 @@ sidewalk_value = 8
 ground_values = [road_value, ground_value, sidewalk_value]
 # Foreground
 person_value = 24
-aug_person_value=50
+aug_person_value = 50
 
 # Occlusion
-obstacle_values = [13, 14, 15 ,17, 19, 20, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 50]
+obstacle_values = [13, 14, 15, 17, 19, 20, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 50]
+
 
 class textcolor:
     HEADER = "\033[95m"
@@ -47,21 +51,27 @@ class textcolor:
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
 
+
 class AugmentationWorkerManager(multiprocessing.Process):
-    def __init__(self, num_workers, task_queue, fg_path_list, bg_path_list, save_directory):
+    def __init__(
+        self, num_workers, task_queue, fg_path_list, bg_path_list, save_directory
+    ):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.workers = []
         self.task_queue = task_queue
         self.save_directory = save_directory
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename=os.path.join(save_directory, 'augmentation.log'),
-                    filemode='w')
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            filename=os.path.join(save_directory, "augmentation.log"),
+            filemode="w",
+        )
         # set up workers.
         for i in range(num_workers):
             worker = AugmentationWorker(task_queue, fg_path_list, bg_path_list)
             self.workers.append(worker)
             worker.p.start()
-
 
     def run(self):
         # this process continously updates the print inside the console to show the current state for each worker
@@ -115,9 +125,7 @@ class AugmentationWorker:
         # Object preprocessing
         try:
             obj_img, obj_mask, obj_rect = obj_preprocesser(
-                flip_fg_img,
-                flip_fg_mask,
-                person_value
+                flip_fg_img, flip_fg_mask, person_value
             )
         except OSError as e:
             raise FailedAugmentation(e)
@@ -135,13 +143,17 @@ class AugmentationWorker:
                     min_occlusion_ratio,
                 )
             else:
-                bottom_pixel_person= random_place_finder(
+                bottom_pixel_person = random_place_finder(
                     flip_bg_mask, ground_values, obj_rect.y, obj_rect.h
                 )
         except IOError:
             raise FailedAugmentation("Could not find any road to place the object on.")
         # Size of person finding
-        person_height = round(person_height_calculation(camera_dict, bottom_pixel_person.x, bottom_pixel_person.y))
+        person_height = round(
+            person_height_calculation(
+                camera_dict, bottom_pixel_person.x, bottom_pixel_person.y
+            )
+        )
         person_width = round(obj_rect.w / obj_rect.h * person_height)
         if person_height < 0 or person_width < 0:
             raise FailedAugmentation()
@@ -166,8 +178,12 @@ class AugmentationWorker:
         )
         self.state.value = b"Saving..."
         # Data saving
-        _, img_path = data_saver(save_directory, bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id)
-        logging.debug(f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person.x} Y: {bottom_pixel_person.y}\n Object W: {person_width} H: {person_height}\n")
+        _, img_path = data_saver(
+            save_directory, bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id
+        )
+        logging.debug(
+            f"Saved file to {img_path} \n Params:\n Position X: {bottom_pixel_person.x} Y: {bottom_pixel_person.y}\n Object W: {person_width} H: {person_height}\n"
+        )
 
     def augmentImage(self, task_queue, fg_path_list, bg_path_list):
         while True:
@@ -194,6 +210,7 @@ class AugmentationWorker:
                 self.state.value = bytes("Shutdown", "utf-8")
                 break
         return True
+
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -291,7 +308,8 @@ if __name__ == "__main__":
         task_queue.put(i)
 
     manager = AugmentationWorkerManager(
-        num_processes, task_queue, fg_path_list, bg_path_list, save_directory)
+        num_processes, task_queue, fg_path_list, bg_path_list, save_directory
+    )
     manager.start()
     while not task_queue.empty and len(manager.workers) > 1:
         print("Done!")

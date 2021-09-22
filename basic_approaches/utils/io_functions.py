@@ -5,6 +5,7 @@ import cv2
 
 from utils.costum_exceptions import ShutdownException
 
+
 def path_reader(path):
     check_for_file(path)
     # Read paths of a CSV file
@@ -57,7 +58,10 @@ def data_saver(save_directory, data_name, img, mask, alpha_mask, id_data):
         save_directory, "mask", data_name + "_" + str(id_data) + ".png"
     )
     alpha_mask_path = os.path.join(
-        save_directory, "gp-gan_predict", "alpha_mask", data_name + "_" + str(id_data) + ".png"
+        save_directory,
+        "gp-gan_predict",
+        "alpha_mask",
+        data_name + "_" + str(id_data) + ".png",
     )
 
     cv2.imwrite(img_path, img)
@@ -85,7 +89,12 @@ def check_for_file(path):
 
 def check_for_folder(folder):
     # check if folder structure exists
-    folders = [folder, os.path.join(folder, "img"), os.path.join(folder, "mask"), os.path.join(folder, "gp-gan_predict", "alpha_mask")]
+    folders = [
+        folder,
+        os.path.join(folder, "img"),
+        os.path.join(folder, "mask"),
+        os.path.join(folder, "gp-gan_predict", "alpha_mask"),
+    ]
     for f in folders:
         try:
             os.makedirs(f)

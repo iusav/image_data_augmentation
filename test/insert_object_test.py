@@ -38,9 +38,7 @@ class TestHeightEstimation(unittest.TestCase):
     bg_width = bg_img.shape[1]
     fg_height = fg_img.shape[0]
     fg_width = fg_img.shape[1]
-    obj_img, obj_mask, obj_rect = obj_preprocesser(
-        fg_img, fg_mask, person_value
-    )
+    obj_img, obj_mask, obj_rect = obj_preprocesser(fg_img, fg_mask, person_value)
     # define positions where occlusion is guaranteed
     test_runs = [{"x": 136, "y": 660}, {"x": 1429, "y": 602}, {"x": 1629, "y": 886}]
 
@@ -51,16 +49,12 @@ class TestHeightEstimation(unittest.TestCase):
             person_y = test["y"]
             # extract the rectangle where the object will be placed
 
-            person_height = round(person_height_calculation(
-                self.camera_dict, person_x, person_y
-            ))
+            person_height = round(
+                person_height_calculation(self.camera_dict, person_x, person_y)
+            )
             person_width = round(self.obj_rect.w / self.obj_rect.h * person_height)
             resized_obj_img, resized_obj_mask = obj_resizer(
-                self.obj_img,
-                self.obj_mask,
-                person_height,
-                person_width,
-                person_value,
+                self.obj_img, self.obj_mask, person_height, person_width, person_value
             )
             fg_bg_img, fg_bg_mask, alpha_mask = fg_bg_preprocesser(
                 resized_obj_img,

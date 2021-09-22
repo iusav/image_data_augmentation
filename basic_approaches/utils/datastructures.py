@@ -3,6 +3,7 @@ class Pixel:
         self.x = x
         self.y = y
 
+
 class Rectangle:
     def __init__(self, x, y, w, h):
         self.x = x
