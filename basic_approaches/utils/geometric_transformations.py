@@ -5,7 +5,7 @@ import math
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils.datastructures import Pixel
+from utils.datastructures import Pixel, Rectangle
 
 # Data fliping
 def data_fliper(img, mask):
@@ -66,21 +66,21 @@ def obj_preprocesser(fg_img, fg_mask, person_value):
         raise IOError("Didn't find a suiting person in the image.")
     else:
         person_id = np.random.choice(person_ids)
-        obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = cv2.boundingRect(objContours[person_id][0])
+        obj_rect = Rectangle(*cv2.boundingRect(objContours[person_id][0]))
 
         obj_mask = np.full((fg_height, fg_width), 0, np.uint8)
         obj_mask = cv2.drawContours(obj_mask, objContours[person_id], contourIdx=-1, color=person_value, thickness=-1)
 
         # croped object checking
-        topX_count = np.count_nonzero(obj_mask[obj_rect_y, obj_rect_x:obj_rect_x + obj_rect_w - 1] == person_value)  # np.unique(obj_mask[0,:])
+        topX_count = np.count_nonzero(obj_mask[obj_rect.y, obj_rect.x:obj_rect.x + obj_rect.w - 1] == person_value)  # np.unique(obj_mask[0,:])
 
         downX_count = np.count_nonzero(
-            obj_mask[obj_rect_y + obj_rect_h - 1, obj_rect_x:obj_rect_x + obj_rect_w - 1] == person_value)  # np.unique(obj_mask[obj_mask.shape[0]-1, :])
+            obj_mask[obj_rect.y + obj_rect.h - 1, obj_rect.x:obj_rect.x + obj_rect.w - 1] == person_value)  # np.unique(obj_mask[obj_mask.shape[0]-1, :])
 
-        leftY_count = np.count_nonzero(obj_mask[obj_rect_y:obj_rect_y + obj_rect_h - 1, obj_rect_x] == person_value)  # np.unique(obj_mask[:, 0])
+        leftY_count = np.count_nonzero(obj_mask[obj_rect.y:obj_rect.y + obj_rect.h - 1, obj_rect.x] == person_value)  # np.unique(obj_mask[:, 0])
 
         reightY_count = np.count_nonzero(
-            obj_mask[obj_rect_y:obj_rect_y + obj_rect_h - 1, obj_rect_x + obj_rect_w - 1] == person_value)  # np.unique(obj_mask[:, obj_mask.shape[1]-1])
+            obj_mask[obj_rect.y:obj_rect.y + obj_rect.h - 1, obj_rect.x + obj_rect.w - 1] == person_value)  # np.unique(obj_mask[:, obj_mask.shape[1]-1])
 
         crop_ratio = 1000
         crop_val = int(obj_areas[person_id] / crop_ratio)
@@ -90,11 +90,11 @@ def obj_preprocesser(fg_img, fg_mask, person_value):
             raise IOError("object is resized")
         else:
             obj_mask = cv2.cvtColor(obj_mask, cv2.COLOR_GRAY2RGB)
-            obj_mask = obj_mask[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
+            obj_mask = obj_mask[obj_rect.y:obj_rect.y + obj_rect.h, obj_rect.x:obj_rect.x + obj_rect.w]
 
-            obj_img = fg_img[obj_rect_y:obj_rect_y + obj_rect_h, obj_rect_x:obj_rect_x + obj_rect_w]
+            obj_img = fg_img[obj_rect.y:obj_rect.y + obj_rect.h, obj_rect.x:obj_rect.x + obj_rect.w]
 
-            return  obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h
+            return  obj_img, obj_mask, obj_rect
 
 def test_for_occlusion(x, y, bg_mask, person_mask, occlusion_rate):
     obj_height = person_mask.shape[0]
@@ -124,21 +124,21 @@ def test_for_occlusion(x, y, bg_mask, person_mask, occlusion_rate):
     return number_pixel_occlusion / number_pixel_person > occlusion_rate
 
 
-def suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h):
+def suitable_place_finder(bg_mask, ground_values, obj_rect_y, obj_rect_h):
     gray_bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_RGB2GRAY)
 
     bg_height = gray_bg_mask.shape[0]
     bg_width = gray_bg_mask.shape[1]
-    BGroad_thresh = np.where(
-        (gray_bg_mask == ground_value)
-        | (gray_bg_mask == sidewalk_value)
-        | (gray_bg_mask == road_value),
-        gray_bg_mask,
-        0,
+    bg_ground_thresh = np.full(
+        (bg_height, bg_width), 0, np.uint8
     )
+    for ground_value in ground_values:
+        bg_ground_thresh = bg_ground_thresh + np.where(
+            gray_bg_mask == ground_value, gray_bg_mask, 0
+        ).astype(np.uint8)
 
     bg_road_contours, _ = cv2.findContours(
-        BGroad_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+        bg_ground_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
     )
     contour_areas = [cv2.contourArea(contour) for contour in bg_road_contours]
 
@@ -157,20 +157,18 @@ def suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, obj
 def force_occlusion(
     bg_mask,
     person_mask,
-    ground_value,
-    sidewalk_value,
-    road_value,
+    ground_values,
     obstacle_values,
     y,
     h,
     occlusion_rate,
 ):
     gray_bg_mask = cv2.cvtColor(bg_mask, cv2.COLOR_RGB2GRAY)
-    bg_obstacle_tresh = np.full(
+    bg_obstacle_thresh = np.full(
         (gray_bg_mask.shape[0], gray_bg_mask.shape[1]), 0, np.uint8
     )
     for obstacle_value in obstacle_values:
-        bg_obstacle_tresh = bg_obstacle_tresh + np.where(
+        bg_obstacle_thresh = bg_obstacle_thresh + np.where(
             gray_bg_mask == obstacle_value, gray_bg_mask, 0
         ).astype(np.uint8)
     _, person_mask_binary = cv2.threshold(
@@ -179,7 +177,7 @@ def force_occlusion(
     person_height = person_mask_binary.shape[0]
     person_width = person_mask_binary.shape[1]
     place_coordinates = np.transpose(
-        suitable_place_finder(bg_mask, ground_value, sidewalk_value, road_value, y, h)
+        suitable_place_finder(bg_mask, ground_values, y, h)
     )
     old_x = 10000
     old_y = 10000
@@ -190,7 +188,7 @@ def force_occlusion(
             continue
         else:
             if test_for_occlusion(
-                x, y, bg_obstacle_tresh, person_mask_binary, occlusion_rate
+                x, y, bg_obstacle_thresh, person_mask_binary, occlusion_rate
             ):
                 return Pixel(x, y)
             else:
@@ -200,9 +198,9 @@ def force_occlusion(
 
 
 # Random place finading
-def random_place_finder(bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h):
+def random_place_finder(bg_mask, ground_values,obj_rect_y, obj_rect_h):
     place_coordinates = suitable_place_finder(
-        bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h
+        bg_mask, ground_values, obj_rect_y, obj_rect_h
     )
     size_road_value = len(place_coordinates[0])
     if size_road_value == 0:
@@ -321,15 +319,15 @@ def transform_point_3D_to_2D(point2D, rv, tv, c):
     return pixel
 
 # Img and mask of object resizing
-def obj_resizer(obj_img, obj_mask, stand_obj_height, stand_obj_width, person_value):
+def obj_resizer(obj_img, obj_mask, obj_height, obj_width, person_value):
     resized_obj_img = cv2.resize(
-        obj_img, (stand_obj_width, stand_obj_height), interpolation=cv2.INTER_CUBIC
+        obj_img, (obj_width, obj_height), interpolation=cv2.INTER_CUBIC
     )
 
     binary_obj_mask = np.where(obj_mask == person_value, 255, 0).astype(np.uint8)
     resized_obj_mask = cv2.resize(
         binary_obj_mask,
-        (stand_obj_width, stand_obj_height),
+        (obj_width, obj_height),
         interpolation=cv2.INTER_NEAREST,
     )
     return resized_obj_img, resized_obj_mask
@@ -359,16 +357,15 @@ def fg_bg_preprocesser(resized_obj_img,
                        background,
                        background_mask,
                        bottom_pixel_person,
-                       stand_obj_height,
-                       stand_obj_width,
-                       bg_height,
-                       bg_width,
+                       obj_height,
+                       obj_width,
                        person_value
                        ):
+    bg_height = background_mask.shape[0]; bg_width = background_mask.shape[1]
     fg_bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
     bg_mask = np.full((bg_height, bg_width, 3), 0, np.uint8)
     obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(
-        bottom_pixel_person.x, bottom_pixel_person.y, stand_obj_width, stand_obj_height
+        bottom_pixel_person.x, bottom_pixel_person.y, obj_width, obj_height
     )
     if obj_start_y < 0:
         resized_obj_img = resized_obj_img[-obj_start_y:, :]

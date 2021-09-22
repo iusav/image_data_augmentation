@@ -12,16 +12,15 @@ import queue
 import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils.geometric_transformations import *
-from utils.datastructures import Pixel
-from utils.costum_exceptions import ShutdownException, FailedAugmentation
-from utils.io_functions import (
+from basic_approaches.utils.geometric_transformations import *
+from basic_approaches.utils.datastructures import Pixel
+from basic_approaches.utils.costum_exceptions import ShutdownException, FailedAugmentation
+from basic_approaches.utils.io_functions import (
     path_reader,
     data_name,
     data_loader,
     data_saver,
     current_id,
-    check_for_file,
     check_for_folder
 )
 
@@ -29,7 +28,7 @@ from utils.io_functions import (
 road_value = 7
 ground_value = 6
 sidewalk_value = 8
-
+ground_values = [road_value, ground_value, sidewalk_value]
 # Foreground
 person_value = 24
 aug_person_value=50
@@ -104,8 +103,6 @@ class AugmentationWorker:
         # Data loading
         self.state.value = b"loading.."
         fg_img, fg_mask, bg_img, bg_mask, camera_dict = data_loader(fg_path, bg_path)
-        bg_height = bg_mask.shape[0]
-        bg_width = bg_mask.shape[1]
 
         # -------- Transformation/ Translation -------- #
         # Foreground fliping
@@ -117,7 +114,7 @@ class AugmentationWorker:
         self.state.value = b"Preprocess objects..."
         # Object preprocessing
         try:
-            obj_img, obj_mask, obj_rect_x, obj_rect_y, obj_rect_w, obj_rect_h = obj_preprocesser(
+            obj_img, obj_mask, obj_rect = obj_preprocesser(
                 flip_fg_img,
                 flip_fg_mask,
                 person_value
@@ -131,25 +128,21 @@ class AugmentationWorker:
                 bottom_pixel_person = force_occlusion(
                     flip_bg_mask,
                     obj_mask,
-                    ground_value,
-                    sidewalk_value,
-                    road_value,
+                    ground_values,
                     obstacle_values,
-                    obj_rect_y,
-                    obj_rect_h,
+                    obj_rect.y,
+                    obj_rect.h,
                     min_occlusion_ratio,
                 )
             else:
                 bottom_pixel_person= random_place_finder(
-                    flip_bg_mask, ground_value, sidewalk_value, road_value, obj_rect_y, obj_rect_h
+                    flip_bg_mask, ground_values, obj_rect.y, obj_rect.h
                 )
         except IOError:
             raise FailedAugmentation("Could not find any road to place the object on.")
         # Size of person finding
-        obj_mask_height = obj_mask.shape[0]
-        obj_mask_width = obj_mask.shape[1]
         person_height = round(person_height_calculation(camera_dict, bottom_pixel_person.x, bottom_pixel_person.y))
-        person_width = round(obj_rect_w / obj_rect_h * person_height)
+        person_width = round(obj_rect.w / obj_rect.h * person_height)
         if person_height < 0 or person_width < 0:
             raise FailedAugmentation()
         self.state.value = b"Blending.."
@@ -169,8 +162,6 @@ class AugmentationWorker:
             bottom_pixel_person,
             person_height,
             person_width,
-            bg_height,
-            bg_width,
             aug_person_value,
         )
         self.state.value = b"Saving..."
@@ -274,6 +265,8 @@ if __name__ == "__main__":
     fg_paths = args.fg_paths
     bg_paths = args.bg_paths
     save_directory = args.output_path
+    # ensure that args.num_process is the number the user wants to use, because we need an additional process
+    # for visualising the progess bars
     num_processes = args.num_processes
     force_occlusion_flag = args.force_occlusion
     min_occlusion_ratio = args.min_occlusion_ratio
