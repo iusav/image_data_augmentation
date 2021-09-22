@@ -5,12 +5,11 @@ import unittest
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
-from numpy.lib.function_base import _insert_dispatcher
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from basic_approaches.basic_img_augmentation import pathReader, data_loader, obj_preprocesser, person_value, get_obj_start_end
-from basic_approaches.geometric_transformations import border_blender
-from pymatting import blend
+from basic_approaches.geometric_transformations import fg_bg_preprocesser, obj_resizer
+
 class TestHeightEstimation(unittest.TestCase):
     file_dir = os.path.dirname(os.path.realpath(__file__))
     bg_files_path = os.path.abspath(os.path.join(file_dir, "../files/"))
@@ -35,7 +34,7 @@ class TestHeightEstimation(unittest.TestCase):
         mask_gray = cv2.cvtColor(self.obj_mask, cv2.COLOR_RGB2GRAY)
         _, mask_binary = cv2.threshold(mask_gray, 1, 255, cv2.THRESH_BINARY)
         masked_obj = cv2.bitwise_and(self.obj_img, self.obj_img, mask=mask_binary)
-        obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(self.x, self.y, self.w, self.h)
+        obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(self.x, self.y+self.h, self.w, self.h)
         bg = self.bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x].copy()
         import copy
         image = copy.deepcopy(self.bg_img)
@@ -45,61 +44,16 @@ class TestHeightEstimation(unittest.TestCase):
         return image, masked_obj
 
     def test_(self):
-        obj_img, obj_mask, alpha, smoother_mask, trimap_mask = border_blender(self.obj_img, self.obj_mask)
-        obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(self.x, self.y, self.w, self.h)
-        background = self.bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x]/255
-        matted_obj = blend(obj_img, background, alpha)*255
-        import copy
-        augmented_image = copy.deepcopy(self.bg_img)
-        augmented_image[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = matted_obj
+        resized_obj_img, resized_obj_mask = obj_resizer(
+            self.obj_img,
+            self.obj_mask,
+            self.h,
+            self.w,
+            person_value,
+            )
+        augmented_image, _, _ = fg_bg_preprocesser(resized_obj_img, resized_obj_mask, self.bg_img, self.bg_mask, self.x, self.y+self.h, self.h, self.w, self.bg_height, self.bg_width, person_value)
         clipped_augmented_image, clipped_obj = self.insert_object_to_background()
-        # fig = plt.figure()
-        # gs = fig.add_gridspec(3,5)
-        # axs = fig.add_subplot(gs[0,0])
-        # axs.set_title("Object")
-        # axs.imshow(self.obj_img)
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[0,1])
-        # axs.set_title("Object mask")
-        # axs.imshow(self.obj_mask, cmap=plt.get_cmap('gray'))
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[0,2])
-        # axs.set_title("Clipped object")
-        # axs.imshow(clipped_obj)
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[1,0])
-        # axs.set_title("Blended object")
-        # axs.imshow(obj_img, cmap=plt.get_cmap('gray'))
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[1,1])
-        # axs.imshow(obj_mask, cmap=plt.get_cmap('gray'))
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[1,2])
-        # axs.set_title("Alpha")
-        # axs.imshow(alpha, cmap=plt.get_cmap('gray'))
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[1,3])
-        # axs.set_title("Smoother mask")
-        # axs.imshow(smoother_mask, cmap=plt.get_cmap('gray'))
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[1,4])
-        # axs.set_title("Trimap mask")
-        # axs.imshow(trimap_mask, cmap=plt.get_cmap('gray'))
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[2,0:2])
-        # axs.set_title("Original image")
-        # axs.imshow(self.fg_img)
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[2,2:4])
-        # axs.set_title("Augmented image")
-        # axs.imshow(augmented_image)
-        # axs.axis("off")
-        # axs = fig.add_subplot(gs[2, 4])
-        # axs.set_title("Matted object")
-        # axs.imshow(matted_obj.astype(np.uint8))
-        # axs.axis("off")
-        # fig.tight_layout()
-        # plt.show()
+
         fig_freq = plt.figure()
         gs_freq = fig_freq.add_gridspec(3, 3)
         axs = fig_freq.add_subplot(gs_freq[0, 0])
@@ -144,9 +98,7 @@ class TestHeightEstimation(unittest.TestCase):
         axs.set_title("Difference Clipped Fourier Image")
         axs.imshow(np.log(np.abs(orig_fourier_image-clipped_fourier_image)))
         axs.axis("off")
-        # axs = fig_freq.add_subplot(gs_freq[1, 1])
-        # axs.imshow(np.log(np.real(orig_fourier_image)), cmap='gray')
-        #plt.show()
+        plt.show()
         plt.imsave("orig_image.png", self.bg_img)
         plt.imsave("orig_image_freq.png", np.log(np.abs(orig_fourier_image)))
         plt.imsave("blended_image.png", augmented_image)
