@@ -257,7 +257,7 @@ def get_obj_start_end(obj_bottom_x, obj_bottom_y, obj_width, obj_height):
     return obj_start_x, obj_start_y, obj_end_x, obj_end_y
 
 
-def borderBlender(foreground, background, alpha):
+def border_blender(foreground, background, alpha):
     foreground = foreground / 255
     background = background / 255
 
@@ -314,7 +314,7 @@ def fg_bg_preprocesser(resized_obj_img,
     bg_mask[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = erode_obj_mask
 
     # combine foreground+background
-    overlapImg = borderBlender(background, fg_bg_img, fg_bg_mask)
+    overlapImg = border_blender(background, fg_bg_img, fg_bg_mask)
     overlapMask = np.where(bg_mask == 255, person_value, background_mask).astype(np.uint8)
     alphaMask = fg_bg_mask
 
