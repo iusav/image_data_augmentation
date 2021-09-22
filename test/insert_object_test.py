@@ -6,17 +6,15 @@ from matplotlib import pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from basic_approaches.basic_img_augmentation import (
-    data_loader,
+from basic_approaches.utils.constants import person_value
+from basic_approaches.utils.geometric_transformations import (
     obj_preprocesser,
-    person_value,
-)
-from utils.geometric_transformations import (
     person_height_calculation,
     obj_resizer,
     fg_bg_preprocesser,
 )
-from utils.datastructures import Pixel
+from basic_approaches.utils.io_functions import data_loader
+from basic_approaches.utils.datastructures import Pixel
 
 
 class TestHeightEstimation(unittest.TestCase):
