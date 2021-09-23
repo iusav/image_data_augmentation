@@ -16,11 +16,10 @@ def path_reader(path):
     return data
 
 
-def data_name(fg_path, bg_path):
-    fg_name = "_".join(fg_path["mask"].split("/")[-1].split("_")[:-2])
-    bg_name = "_".join(bg_path["mask"].split("/")[-1].split("_")[:-2])
+def data_name(path):
+    name = "_".join(path["mask"].split("/")[-1].split("_")[:-2])
 
-    return fg_name, bg_name
+    return name
 
 def check_img_and_mask(img_paths):
     for _, value in img_paths.items():

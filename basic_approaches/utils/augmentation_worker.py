@@ -150,7 +150,7 @@ class AugmentationWorker:
         bg_path = random.choice(worker_params.bg_path_list)
 
         # Data name chosing
-        fg_name, bg_name = data_name(fg_path, bg_path)
+        bg_name = data_name(bg_path)
 
         # Data loading
         self.state.value = b"loading.."
