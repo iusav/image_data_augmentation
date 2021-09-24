@@ -13,7 +13,7 @@ from basic_approaches.utils.geometric_transformations import (
     obj_resizer,
     fg_bg_preprocesser,
 )
-from basic_approaches.utils.io_functions import data_loader
+from basic_approaches.utils.io_functions import fg_data_loader, bg_data_loader
 from basic_approaches.utils.datastructures import Pixel
 
 
@@ -31,7 +31,8 @@ class TestHeightEstimation(unittest.TestCase):
         "mask": os.path.join(bg_files_path, "jena_000075_000019_gtFine_labelIds.png"),
         "camera": os.path.join(bg_files_path, "jena_000075_000019_camera.json"),
     }
-    fg_img, fg_mask, bg_img, bg_mask, camera_dict = data_loader(fg_dict, bg_dict)
+    fg_img, fg_mask = fg_data_loader(fg_dict)
+    bg_img, bg_mask, camera_dict = bg_data_loader(bg_dict)
     bg_height = bg_img.shape[0]
     bg_width = bg_img.shape[1]
     fg_height = fg_img.shape[0]
