@@ -453,4 +453,4 @@ def fg_bg_preprocesser(
     )
     alphaMask = fg_bg_mask
 
-    return overlapImg, overlapMask, alphaMask
+    return overlapImg, overlapMask, alphaMask, fg_bg_img
