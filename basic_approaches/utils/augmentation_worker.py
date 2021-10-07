@@ -132,7 +132,7 @@ class AugmentationWorker:
         except ValueError:
             raise FailedAugmentation("Trimap did not contain any values=0")
         # Foreground and background preprocessing
-        fg_bg_img, fg_bg_mask, alpha_mask = fg_bg_preprocesser(
+        fg_bg_img, fg_bg_mask, alpha_mask, _ = fg_bg_preprocesser(
             resized_obj_img,
             resized_obj_mask,
             flip_bg_img,

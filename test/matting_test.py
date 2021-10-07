@@ -8,14 +8,16 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from basic_approaches.basic_img_augmentation import (
-    pathReader,
-    data_loader,
+from basic_approaches.utils.constants import person_value
+from basic_approaches.utils.geometric_transformations import (
     obj_preprocesser,
-    person_value,
-    get_obj_start_end,
+    person_height_calculation,
+    obj_resizer,
+    fg_bg_preprocesser,
+    get_obj_start_end
 )
-from basic_approaches.geometric_transformations import fg_bg_preprocesser, obj_resizer
+from basic_approaches.utils.io_functions import fg_data_loader, bg_data_loader
+from basic_approaches.utils.datastructures import Pixel
 
 
 class TestHeightEstimation(unittest.TestCase):
@@ -32,13 +34,14 @@ class TestHeightEstimation(unittest.TestCase):
         "mask": os.path.join(bg_files_path, "aachen_000031_000019_gtFine_labelIds.png"),
         "camera": os.path.join(bg_files_path, "jena_000075_000019_camera.json"),
     }
-    fg_img, fg_mask, bg_img, bg_mask, camera_dict = data_loader(fg_dict, bg_dict)
+    fg_img, fg_mask = fg_data_loader(fg_dict)
+    bg_img, bg_mask, camera_dict = bg_data_loader(bg_dict)
     bg_height = bg_img.shape[0]
     bg_width = bg_img.shape[1]
     fg_height = fg_img.shape[0]
     fg_width = fg_img.shape[1]
-    obj_img, obj_mask, x, y, w, h = obj_preprocesser(
-        fg_img, fg_mask, bg_height, bg_width, person_value, fg_height, fg_width
+    obj_img, obj_mask, obj_rect = obj_preprocesser(
+        fg_img, fg_mask, person_value
     )
     # define positions where occlusion is guaranteed
     test_runs = [{"x": 136, "y": 660}, {"x": 1429, "y": 602}, {"x": 1629, "y": 886}]
@@ -48,7 +51,7 @@ class TestHeightEstimation(unittest.TestCase):
         _, mask_binary = cv2.threshold(mask_gray, 1, 255, cv2.THRESH_BINARY)
         masked_obj = cv2.bitwise_and(self.obj_img, self.obj_img, mask=mask_binary)
         obj_start_x, obj_start_y, obj_end_x, obj_end_y = get_obj_start_end(
-            self.x, self.y + self.h, self.w, self.h
+            self.obj_rect.x, self.obj_rect.y + self.obj_rect.h, self.obj_rect.w, self.obj_rect.h
         )
         bg = self.bg_img[obj_start_y:obj_end_y, obj_start_x:obj_end_x].copy()
         import copy
@@ -61,19 +64,16 @@ class TestHeightEstimation(unittest.TestCase):
 
     def test_(self):
         resized_obj_img, resized_obj_mask = obj_resizer(
-            self.obj_img, self.obj_mask, self.h, self.w, person_value
+            self.obj_img, self.obj_mask, self.obj_rect.h, self.obj_rect.w, person_value
         )
-        augmented_image, _, _ = fg_bg_preprocesser(
+        augmented_image, _, _, _ = fg_bg_preprocesser(
             resized_obj_img,
             resized_obj_mask,
             self.bg_img,
             self.bg_mask,
-            self.x,
-            self.y + self.h,
-            self.h,
-            self.w,
-            self.bg_height,
-            self.bg_width,
+            Pixel(self.obj_rect.x, self.obj_rect.y + self.obj_rect.h),
+            self.obj_rect.h,
+            self.obj_rect.w,
             person_value,
         )
         clipped_augmented_image, clipped_obj = self.insert_object_to_background()

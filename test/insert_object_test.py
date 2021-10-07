@@ -62,6 +62,7 @@ class TestHeightEstimation(unittest.TestCase):
         bg[loc] = masked_obj[loc]
         image[obj_start_y:obj_end_y, obj_start_x:obj_end_x] = bg
         return image, masked_obj
+    #test_runs = [{"x": 136, "y": 660}, {"x": 1429, "y": 602}, {"x": 1629, "y": 886}]
 
     def test_(self):
         for test in self.test_runs:
