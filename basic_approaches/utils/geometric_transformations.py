@@ -484,6 +484,5 @@ def brightness_correcter(fg_img, fg_mask, bg_img):
     corrected_fg_img = cv2.cvtColor(fg_hsv, cv2.COLOR_HSV2RGB)
 
     overlapImg = border_blender(fg_img, corrected_fg_img, fg_mask)
-    overlapImg = cv2.cvtColor(overlapImg, cv2.COLOR_RGB2BGR)
 
     return overlapImg
