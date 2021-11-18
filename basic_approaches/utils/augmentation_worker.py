@@ -142,6 +142,10 @@ class AugmentationWorker:
             person_width,
             aug_person_value,
         )
+        
+        # Adjustment of the brightness of a person
+        fg_bg_img = brightness_correcter(fg_bg_img, alpha_mask, flip_bg_img)
+
         return fg_bg_img, fg_bg_mask, alpha_mask, bottom_pixel_person, person_width, person_height
 
     def augmentImageInner(self, worker_params, task_id):
@@ -159,6 +163,7 @@ class AugmentationWorker:
 
         fg_bg_img, fg_bg_mask, alpha_mask, bottom_pixel_person, person_width, person_height = self.add_pedestrian_to_image(fg_img, fg_mask, bg_img, bg_mask, camera_dict, worker_params)
         self.state.value = b"Saving..."
+
         # Data saving
         _, img_path = data_saver(
             worker_params.save_directory, bg_name, fg_bg_img, fg_bg_mask, alpha_mask, task_id

@@ -82,7 +82,7 @@ def obj_preprocesser(fg_img, fg_mask, person_value):
             color=person_value,
             thickness=-1,
         )
-
+        
         # croped object checking
         topX_count = np.count_nonzero(
             obj_mask[obj_rect.y, obj_rect.x : obj_rect.x + obj_rect.w - 1]
@@ -454,3 +454,36 @@ def fg_bg_preprocesser(
     alphaMask = fg_bg_mask
 
     return overlapImg, overlapMask, alphaMask, fg_bg_img
+
+# Adjustment of the brightness of a person
+def brightness_value(img,b_mask):
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    bright_area = hsv[...,2]
+    bright_value =  bright_area[b_mask].mean()                       
+    
+    return bright_value
+
+def brightness_correcter(fg_img, fg_mask, bg_img):
+    fg_img = fg_img.copy()
+    
+    # int to bool value in mask
+    gray_mask = cv2.cvtColor(fg_mask, cv2.COLOR_RGB2GRAY)
+    bool_mask = np.where(gray_mask==0, False, True )
+    
+    # Foreground brightness value finding
+    fg_bright_value = brightness_value(fg_img, bool_mask)   
+
+    # Foreground brightness value finding
+    bg_bright_value = brightness_value(bg_img,  bool_mask) 
+
+    # Brightness correcting
+    bright_ratio = bg_bright_value/fg_bright_value
+
+    fg_hsv = cv2.cvtColor(fg_img, cv2.COLOR_RGB2HSV)
+    fg_hsv[...,2] = fg_hsv[...,2]*bright_ratio
+    corrected_fg_img = cv2.cvtColor(fg_hsv, cv2.COLOR_HSV2RGB)
+
+    overlapImg = border_blender(fg_img, corrected_fg_img, fg_mask)
+    overlapImg = cv2.cvtColor(overlapImg, cv2.COLOR_RGB2BGR)
+
+    return overlapImg
