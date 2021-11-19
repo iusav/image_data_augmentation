@@ -473,16 +473,25 @@ def brightness_correcter(fg_img, fg_mask, bg_img):
     # Foreground brightness value finding
     fg_bright_value = brightness_value(fg_img, bool_mask)   
 
-    # Foreground brightness value finding
+    # Backeground brightness value finding
     bg_bright_value = brightness_value(bg_img,  bool_mask) 
+    
+    ratio_value = bg_bright_value/fg_bright_value
 
     # Brightness correcting
-    bright_ratio = bg_bright_value/fg_bright_value
+    hsv = cv2.cvtColor(fg_img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
 
-    fg_hsv = cv2.cvtColor(fg_img, cv2.COLOR_RGB2HSV)
-    fg_hsv[...,2] = fg_hsv[...,2]*bright_ratio
-    corrected_fg_img = cv2.cvtColor(fg_hsv, cv2.COLOR_HSV2RGB)
+    if ratio_value > 1:
+        lim = math.floor(255/ratio_value)     
 
+        v[v > lim] = 255
+        v[v <= lim] = np.multiply(v[v <= lim], ratio_value, out=v[v <= lim], casting="unsafe")
+    elif ratio_value < 1:
+        v = np.multiply(v, ratio_value, out=v, casting="unsafe")
+
+    final_hsv = cv2.merge((h, s, v))
+    corrected_fg_img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
     overlapImg = border_blender(fg_img, corrected_fg_img, fg_mask)
 
     return overlapImg
