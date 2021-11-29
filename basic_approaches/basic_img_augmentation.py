@@ -17,7 +17,7 @@ if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
     parser = create_parser(file_dir)
     args = parser.parse_args()
-
+    
     check_for_folder(args.output_path)
     fg_path_list = path_reader(args.fg_paths)
     bg_path_list = path_reader(args.bg_paths)
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     # put as many task on the queue as we want to have images in our dataset
     for i in range(args.dataset_size - id_data):
         task_queue.put(i)
-    worker_params = AugmentationWorkerParams(args.output_path, fg_path_list, bg_path_list, args.force_occlusion, args.min_occlusion_ratio)
+    worker_params = AugmentationWorkerParams(args.output_path, fg_path_list, bg_path_list, args.force_occlusion, args.min_occlusion_ratio, args.annotat_status)
     manager = AugmentationWorkerManager(
         args.num_processes, task_queue, worker_params
     )

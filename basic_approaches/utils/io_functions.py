@@ -35,8 +35,9 @@ def fg_data_loader(fg_path):
     fg_img = cv2.cvtColor(fg_img, cv2.COLOR_BGR2RGB)
     fg_mask = cv2.imread(mask_fg_path)
     fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_BGR2RGB)
-
-    return fg_img, fg_mask
+    with open(fg_path["polygons"], "r") as polygons_settings:
+        polygons_dict = json.load(polygons_settings)
+    return fg_img, fg_mask, polygons_dict
 
 def bg_data_loader(bg_path):
     check_img_and_mask(bg_path)

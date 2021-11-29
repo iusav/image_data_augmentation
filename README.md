@@ -67,6 +67,8 @@ optional arguments:
   --bg BGPATHS          Select the csv files which where created by the path_creating script
   --process NUM_PROCESSES
                         Select the number of processes
+  --annotation ANNOTATION_STATUS
+                        Select an option to annotate the data: mask or polygon
 
 ```
 The default values for the arguments are:  
@@ -74,7 +76,8 @@ The default values for the arguments are:
 `OUTPUT_PATH = ./created_dataset`  
 `FGPATHS = ./basic_approaches/citysc_fgPaths.csv`  
 `BGPATHS = ./basic_approaches/citysc_bgPaths.csv`  
-`NUM_PROCESSES = 4`  
+`NUM_PROCESSES = 4` 
+`ANNOTATION_STATUS = mask` 
 
 
 ### For more information read basic_approaches/Dokumentation_basic_approaches.pdf

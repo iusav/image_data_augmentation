@@ -1,9 +1,12 @@
 import cv2
 import numpy as np
 import random
+from random import randint
 import math
 import sys
 import os
+
+from basic_approaches.utils.io_functions import path_reader 
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.datastructures import Pixel, Rectangle
@@ -13,18 +16,51 @@ def data_fliper(img, mask):
     true_false_list = [True, False]
     flip_choice = random.choice(true_false_list)
 
+    status = False
     if flip_choice == True:
+        status = True
         img = cv2.flip(img, 1)
         mask = cv2.flip(mask, 1)
 
-    return img, mask
+    return img, mask, status
 
+# Convert polygons to masks
+def polygon2mask(mask_height, mask_width, polygons_dict):
+    objs_polygon = []
+    binary_mask = np.full((mask_height, mask_width), 0, np.uint8)
+    
+    obj_key = 'objects'
+    if obj_key in  polygons_dict:
+        num_persons = 0
+        for label in polygons_dict[obj_key]:
+            if 'person' in label['label']: 
+                obj_polygon = np.expand_dims(np.array(label['polygon']), axis = 1)
+                objs_polygon.append(obj_polygon)
+                num_persons += 1
+
+        person_num = randint(0, num_persons-1)
+        binary_mask = cv2.drawContours(binary_mask, objs_polygon, contourIdx=person_num, color=255, thickness=-1).astype(np.uint8)
+    
+    return binary_mask
 
 # Object preprocessing
-def obj_preprocesser(fg_img, fg_mask, person_value):
-    gray_fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_RGB2GRAY)
-    obj_thresh = np.where(gray_fg_mask == person_value, 255, 0).astype(np.uint8)
-
+def obj_preprocesser(fg_img, fg_name, fg_mask, flip_fg_status, person_value, polygons_dict, annotat_status):
+    
+    if annotat_status == 'polygon':
+        mask_height, mask_width, _ = fg_mask.shape
+        obj_thresh = polygon2mask(mask_height, mask_width, polygons_dict)
+        if flip_fg_status:
+            obj_thresh = cv2.flip(obj_thresh, 1)
+    else:
+        if annotat_status != 'mask':
+            print('! Warning !')
+            print('Entered "annotation status" into the arguments: ',annotat_status)
+            print('"Annotation status" is not "mask" or "polygon"')
+            print('Annotation status was automatically changed to "mask"')
+            annotat_status = 'mask'
+        gray_fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_RGB2GRAY)
+        obj_thresh = np.where(gray_fg_mask == person_value, 255, 0).astype(np.uint8)
+        
     contours, hierarchy = cv2.findContours(
         obj_thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
     )

@@ -12,6 +12,7 @@ def create_parser(file_dir):
 	DEFAULT_NUMBER_PROCESSES = 2
 	DEFAULT_OCCLUSION_FLAG = False
 	DEFAULT_MIN_OCCLUSION_RATIO = 0.4
+	DEFAULT_ANNOTATION_STATUS = "mask"
 
 	parser = argparse.ArgumentParser(
 	description="Create the augmented dataset for cityscapes."
@@ -61,5 +62,12 @@ def create_parser(file_dir):
 	default=DEFAULT_MIN_OCCLUSION_RATIO,
 	type=float,
 	help="Set the occlusion ratio of the pedestrian.",
+	)
+	parser.add_argument(
+	"--annotation",
+	dest="annotat_status",
+	default=DEFAULT_ANNOTATION_STATUS,
+	type=str,
+	help="Select an option to annotate the data, with masks or polygons.",
 	)
 	return parser

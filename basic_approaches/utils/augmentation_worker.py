@@ -79,19 +79,21 @@ class AugmentationWorker:
         # set the state as multiprocessing value so the thread can change the value of the member variable
         self.state = Value(c_char_p, b"init")
 
-    def add_pedestrian_to_image(self, fg_img, fg_mask, bg_img, bg_mask, camera_dict, worker_params):
+    def add_pedestrian_to_image(self, fg_img, fg_mask, fg_name, bg_img, bg_mask, camera_dict, polygons_dict, worker_params):
+        annotat_status = worker_params.annotat_status
+        
         # -------- Transformation/ Translation -------- #
         # Foreground fliping
         self.state.value = b"Flip..."
-        flip_fg_img, flip_fg_mask = data_fliper(fg_img, fg_mask)
-
+        flip_fg_img, flip_fg_mask, flip_fg_status = data_fliper(fg_img, fg_mask)
+        
         # Background fliping
-        flip_bg_img, flip_bg_mask = data_fliper(bg_img, bg_mask)
+        flip_bg_img, flip_bg_mask, flip_bg_status = data_fliper(bg_img, bg_mask)
         self.state.value = b"Preprocess objects..."
         # Object preprocessing
         try:
             obj_img, obj_mask, obj_rect = obj_preprocesser(
-                flip_fg_img, flip_fg_mask, person_value
+                flip_fg_img, fg_name, flip_fg_mask, flip_fg_status, person_value, polygons_dict, annotat_status
             )
         except OSError as e:
             raise FailedAugmentation(e)
@@ -155,13 +157,14 @@ class AugmentationWorker:
 
         # Data name chosing
         bg_name = data_name(bg_path)
+        fg_name = data_name(fg_path)
 
         # Data loading
         self.state.value = b"loading.."
         bg_img, bg_mask, camera_dict = bg_data_loader(bg_path)
-        fg_img, fg_mask = fg_data_loader(fg_path)
+        fg_img, fg_mask, polygons_dict = fg_data_loader(fg_path)
 
-        fg_bg_img, fg_bg_mask, alpha_mask, bottom_pixel_person, person_width, person_height = self.add_pedestrian_to_image(fg_img, fg_mask, bg_img, bg_mask, camera_dict, worker_params)
+        fg_bg_img, fg_bg_mask, alpha_mask, bottom_pixel_person, person_width, person_height = self.add_pedestrian_to_image(fg_img, fg_mask, fg_name, bg_img, bg_mask, camera_dict, polygons_dict, worker_params)
         self.state.value = b"Saving..."
 
         # Data saving

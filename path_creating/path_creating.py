@@ -38,8 +38,10 @@ def pathCreater(json_path):
     camera_directory = mask_directory.replace("gtFine", "camera")
     img_path = os.path.join(img_directory, str(data_name) + "_leftImg8bit.png")
     camera_path = os.path.join(camera_directory, str(data_name) + "_camera.json")
+    polygons_directory = mask_directory
+    polygons_path = os.path.join(polygons_directory, str(data_name) + "_gtFine_polygons.json")
 
-    return {"img": img_path, "mask": mask_path, "camera": camera_path}
+    return {"img": img_path, "mask": mask_path, "camera": camera_path, "polygons": polygons_path}
 
 
 def processJsonFiles(json_path, obj_bg_ratio=0.001):
