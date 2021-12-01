@@ -22,6 +22,7 @@ if __name__ == "__main__":
     fg_path_list = path_reader(args.fg_paths)
     bg_path_list = path_reader(args.bg_paths)
 
+    print('Entered "annotation status" into the arguments: ',args.annotat_status)
     id_data = current_id(args.output_path)
     # id_data = 1
     if id_data >= args.dataset_size:

@@ -25,7 +25,7 @@ def data_fliper(img, mask):
     return img, mask, status
 
 # Convert polygons to masks
-def polygon2mask(mask_height, mask_width, polygons_dict):
+def polygon2mask(mask_height, mask_width, polygons_dict, obj_bg_ratio, fg_height, fg_width):
     objs_polygon = []
     binary_mask = np.full((mask_height, mask_width), 0, np.uint8)
     
@@ -35,20 +35,50 @@ def polygon2mask(mask_height, mask_width, polygons_dict):
         for label in polygons_dict[obj_key]:
             if 'person' in label['label']: 
                 obj_polygon = np.expand_dims(np.array(label['polygon']), axis = 1)
-                objs_polygon.append(obj_polygon)
+                objs_polygon.append([obj_polygon])
                 num_persons += 1
 
-        person_num = randint(0, num_persons-1)
-        binary_mask = cv2.drawContours(binary_mask, objs_polygon, contourIdx=person_num, color=255, thickness=-1).astype(np.uint8)
+        person_ids, obj_areas = person_ids_finder(obj_bg_ratio, fg_height, fg_width, objs_polygon)        
+        person_id = np.random.choice(person_ids)
+
+        binary_mask = cv2.drawContours(binary_mask, objs_polygon[person_id], contourIdx=-1, color=255, thickness=-1).astype(np.uint8)
     
     return binary_mask
 
+# Find person ids on the mask or polygons
+def person_ids_finder(obj_bg_ratio, height, width, objContours):
+    fg_area = int(height * width)
+    
+    # List of Areas
+    obj_areas = [cv2.contourArea(objContour[0]) for objContour in objContours]
+    obj_areas_ratio = [obj_area / fg_area for obj_area in obj_areas]
+    obj_areas_ratio = np.array(obj_areas_ratio)
+    
+    person_ids = np.where(obj_areas_ratio >= obj_bg_ratio)[0]
+
+    if len(person_ids) == 0:
+        raise IOError("Didn't find a suiting person in the image.")
+    else:
+        person_ids = person_ids  
+
+    return person_ids, obj_areas
+
 # Object preprocessing
 def obj_preprocesser(fg_img, fg_name, fg_mask, flip_fg_status, person_value, polygons_dict, annotat_status):
+    # Ratio between object and background area
+    # Min ratio for object chosing
+    # default 0.01, i.e. obj_area / bg_area
+    # can change obj_bg_ratio, for Example obj_bg_ratio = 0.005
+    obj_bg_ratio = 0.01
     
+    fg_height = fg_mask.shape[0]
+    fg_width = fg_mask.shape[1]
+
+    # Annotation status checking
     if annotat_status == 'polygon':
         mask_height, mask_width, _ = fg_mask.shape
-        obj_thresh = polygon2mask(mask_height, mask_width, polygons_dict)
+        
+        obj_thresh = polygon2mask(mask_height, mask_width, polygons_dict, obj_bg_ratio, fg_height, fg_width)
         if flip_fg_status:
             obj_thresh = cv2.flip(obj_thresh, 1)
     else:
@@ -88,22 +118,8 @@ def obj_preprocesser(fg_img, fg_name, fg_mask, flip_fg_status, person_value, pol
             objHierarchy.append([row_hierarchy])
             objContours.append(contour)
 
-    # List of Areas
-    obj_areas = [cv2.contourArea(objContour[0]) for objContour in objContours]
+    person_ids, obj_areas = person_ids_finder(obj_bg_ratio, fg_height, fg_width, objContours)
 
-    # Ratio between object and background area
-    # Min ratio for object chosing
-    # default 0.01, i.e. obj_area / bg_area
-    # can change obj_bg_ratio, for Example obj_bg_ratio = 0.005
-    obj_bg_ratio = 0.01
-    fg_height = fg_mask.shape[0]
-    fg_width = fg_mask.shape[1]
-    fg_area = int(fg_height * fg_width)
-
-    obj_areas_ratio = [obj_area / fg_area for obj_area in obj_areas]
-    obj_areas_ratio = np.array(obj_areas_ratio)
-
-    person_ids = np.where(obj_areas_ratio >= obj_bg_ratio)[0]
     if len(person_ids) == 0:
         raise IOError("Didn't find a suiting person in the image.")
     else:
