@@ -21,9 +21,6 @@ path_creating/test/
 
 path_creating/.ipynb_checkpoints/
 
-# NOT ignore example_data
-!example_data/*
-
 
 *.csv
 *.json
