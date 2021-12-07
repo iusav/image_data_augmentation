@@ -21,6 +21,9 @@ path_creating/test/
 
 path_creating/.ipynb_checkpoints/
 
+# created_dataset
+created_dataset/
+
 
 *.csv
 *.json
