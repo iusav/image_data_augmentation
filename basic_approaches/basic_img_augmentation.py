@@ -21,8 +21,16 @@ if __name__ == "__main__":
     check_for_folder(args.output_path)
     fg_path_list = path_reader(args.fg_paths)
     bg_path_list = path_reader(args.bg_paths)
+    
+    if (args.annotat_status != 'mask') & (args.annotat_status != 'polygon'):
+        print('! Warning !')
+        print('Entered "annotation status" into the arguments: ',args.annotat_status)
+        print('"Annotation status" is not "mask" or "polygon"')
+        print('Annotation status was automatically changed to "mask"')
+        args.annotat_status = 'mask'
+    else:
+        print('Entered "annotation status" into the arguments: ',args.annotat_status)
 
-    print('Entered "annotation status" into the arguments: ',args.annotat_status)
     id_data = current_id(args.output_path)
     # id_data = 1
     if id_data >= args.dataset_size:

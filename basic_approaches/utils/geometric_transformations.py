@@ -77,17 +77,10 @@ def obj_preprocesser(fg_img, fg_name, fg_mask, flip_fg_status, person_value, pol
     # Annotation status checking
     if annotat_status == 'polygon':
         mask_height, mask_width, _ = fg_mask.shape
-        
         obj_thresh = polygon2mask(mask_height, mask_width, polygons_dict, obj_bg_ratio, fg_height, fg_width)
         if flip_fg_status:
             obj_thresh = cv2.flip(obj_thresh, 1)
     else:
-        if annotat_status != 'mask':
-            print('! Warning !')
-            print('Entered "annotation status" into the arguments: ',annotat_status)
-            print('"Annotation status" is not "mask" or "polygon"')
-            print('Annotation status was automatically changed to "mask"')
-            annotat_status = 'mask'
         gray_fg_mask = cv2.cvtColor(fg_mask, cv2.COLOR_RGB2GRAY)
         obj_thresh = np.where(gray_fg_mask == person_value, 255, 0).astype(np.uint8)
         
