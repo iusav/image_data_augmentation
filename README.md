@@ -77,4 +77,10 @@ The default values for the arguments are:
 `NUM_PROCESSES = 4`  
 
 
+| Source foreground | Source background | Composited img | Composited mask |
+| --- | --- | --- | --- |
+| ![](example_data/fg_1.png) | ![](example_data/bg_1.png) | ![](example_data/img_1.png) | ![](example_data/mask_1.png) | 
+| ![](example_data/fg_2.png) | ![](example_data/bg_2.png) | ![](example_data/img_2.png) | ![](example_data/mask_2.png) |
+
+
 ### For more information read basic_approaches/Dokumentation_basic_approaches.pdf
