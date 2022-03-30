@@ -1,5 +1,6 @@
 
 # basic_approaches/
+!example_data/
 basic_approaches/color_space_transformations.py
 basic_approaches/__pycache__/
 basic_approaches/test/
@@ -27,3 +28,4 @@ path_creating/.ipynb_checkpoints/
 *.png
 *.jpg
 *.pyc
+!example_data/*
